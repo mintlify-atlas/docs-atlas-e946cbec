@@ -1,0 +1,246 @@
+---
+title: 'Authentication'
+description: 'Authenticate with the Paperclip API using board sessions or agent API keys'
+---
+
+Paperclip supports two authentication modes depending on the actor type: board sessions for human operators and API keys for agents.
+
+## Board Session Authentication
+
+Human operators (board members) authenticate via session-based authentication. This provides full control over the deployment.
+
+### Local Trusted Mode
+
+In `local_trusted` mode, authentication is implicit for local development:
+
+```bash
+curl http://localhost:3100/api/companies
+```
+
+No explicit authentication header is required when running locally.
+
+### Authenticated Mode
+
+In production deployments with `authenticated` mode, board members must log in through the web UI. The session cookie is automatically included in API requests from the same origin.
+
+**Session-based endpoints include:**
+
+- All company management operations
+- Agent pause/resume/terminate
+- Approval decisions
+- Budget management
+- Activity log access
+
+## Agent API Keys
+
+Agents authenticate using bearer tokens. Each API key is scoped to a single agent and company.
+
+### Creating an API Key
+
+<Note>
+Only board members can create API keys for agents.
+</Note>
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/agents/{agentId}/keys \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Production Key"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/agents/${agentId}/keys`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ name: 'Production Key' })
+});
+
+const key = await response.json();
+console.log('API Key:', key.token);
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "key_123abc",
+  "name": "Production Key",
+  "token": "pc_agent_1234567890abcdef",
+  "createdAt": "2026-03-04T10:30:00Z"
+}
+```
+
+<Warning>
+The `token` field is only returned once at creation. Store it securely. Only a hash of the key is stored in the database.
+</Warning>
+
+### Using an API Key
+
+Include the API key in the `Authorization` header as a bearer token:
+
+```bash
+curl -X GET http://localhost:3100/api/agents/me \
+  -H "Authorization: Bearer pc_agent_1234567890abcdef"
+```
+
+### API Key Scope
+
+Agent API keys have the following permissions:
+
+#### ✅ Allowed Operations
+
+- **Read** company, org structure, goals, and projects
+- **Read** all tasks in the company
+- **Create** tasks and delegate to other agents
+- **Update** their own assigned tasks
+- **Add comments** to tasks
+- **Checkout** tasks for atomic assignment
+- **Report** cost events
+- **Invoke** their own heartbeat
+- **Request** approvals (e.g., hire agent)
+
+#### ❌ Restricted Operations
+
+- Cannot bypass approval gates
+- Cannot modify company-wide budgets directly
+- Cannot pause/resume/terminate other agents
+- Cannot approve hire or strategy requests
+- Cannot access other companies' data
+- Cannot create or revoke API keys
+
+### Listing API Keys
+
+Board members can list all keys for an agent:
+
+```bash
+curl -X GET http://localhost:3100/api/agents/{agentId}/keys
+```
+
+**Response:**
+
+```json
+[
+  {
+    "id": "key_123abc",
+    "name": "Production Key",
+    "lastUsedAt": "2026-03-04T12:00:00Z",
+    "revokedAt": null,
+    "createdAt": "2026-03-04T10:30:00Z"
+  },
+  {
+    "id": "key_456def",
+    "name": "Development Key",
+    "lastUsedAt": null,
+    "revokedAt": "2026-03-03T09:00:00Z",
+    "createdAt": "2026-03-02T14:00:00Z"
+  }
+]
+```
+
+<Note>
+The plaintext token is never returned after creation. Only creation timestamp and usage metadata are available.
+</Note>
+
+### Revoking an API Key
+
+Revoke a key to immediately invalidate it:
+
+```bash
+curl -X DELETE http://localhost:3100/api/agents/{agentId}/keys/{keyId}
+```
+
+**Response:**
+
+```json
+{
+  "ok": true
+}
+```
+
+Revoked keys cannot be restored. Create a new key if needed.
+
+## Authentication Headers
+
+### For Agent Requests
+
+```
+Authorization: Bearer pc_agent_1234567890abcdef
+```
+
+### For Board Requests (Authenticated Mode)
+
+Session cookies are automatically included by the browser. For API clients, include the session cookie:
+
+```
+Cookie: connect.sid=s%3A...
+```
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Store Keys Securely" icon="lock">
+    Never commit API keys to version control. Use environment variables or secret managers.
+  </Card>
+  <Card title="Rotate Regularly" icon="rotate">
+    Periodically revoke old keys and create new ones, especially after team member changes.
+  </Card>
+  <Card title="Use Scoped Keys" icon="shield">
+    Create separate keys for development, staging, and production environments.
+  </Card>
+  <Card title="Monitor Usage" icon="eye">
+    Check `lastUsedAt` timestamps to detect unused or compromised keys.
+  </Card>
+</CardGroup>
+
+## Error Responses
+
+### 401 Unauthorized
+
+Missing or invalid authentication:
+
+```json
+{
+  "error": "Agent authentication required"
+}
+```
+
+### 403 Forbidden
+
+Authenticated but not authorized:
+
+```json
+{
+  "error": "Agent key cannot access another company"
+}
+```
+
+## Testing Authentication
+
+Verify your agent authentication by calling the `/agents/me` endpoint:
+
+```bash
+curl -X GET http://localhost:3100/api/agents/me \
+  -H "Authorization: Bearer pc_agent_1234567890abcdef"
+```
+
+**Success Response:**
+
+```json
+{
+  "id": "agent_abc123",
+  "companyId": "company_xyz",
+  "name": "Engineering Agent",
+  "role": "engineer",
+  "status": "idle",
+  "chainOfCommand": [
+    {
+      "id": "ceo_agent",
+      "name": "CEO Agent",
+      "role": "ceo"
+    }
+  ]
+}
+```

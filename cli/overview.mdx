@@ -1,0 +1,273 @@
+---
+title: 'CLI Overview'
+description: 'Command-line interface for managing your Paperclip instance'
+---
+
+## Introduction
+
+The Paperclip CLI (`paperclipai`) is the primary tool for setting up, configuring, and running your Paperclip instance. It provides interactive wizards, diagnostic tools, and utilities for managing your AI agent control plane.
+
+## Installation
+
+Install the Paperclip CLI globally via npm:
+
+```bash
+npm install -g paperclipai
+```
+
+Or use it directly with npx:
+
+```bash
+npx paperclipai --help
+```
+
+## Quick Start
+
+Get started with a new Paperclip instance in three commands:
+
+```bash
+# Run interactive setup wizard
+paperclipai onboard
+
+# Check system health
+paperclipai doctor
+
+# Start the server
+paperclipai run
+```
+
+## CLI Version
+
+Current version: **0.2.5**
+
+Check your installed version:
+
+```bash
+paperclipai --version
+```
+
+## Global Options
+
+These options are available across all commands:
+
+### `--config <path>`
+Path to custom config file. Defaults to `~/.paperclip/instances/default/config.json`.
+
+```bash
+paperclipai run --config /path/to/config.json
+```
+
+### `--data-dir <path>`
+Paperclip data directory root. Isolates state from the default `~/.paperclip` directory.
+
+```bash
+paperclipai onboard --data-dir /custom/data/path
+```
+
+## Core Commands
+
+### Setup & Configuration
+
+<CardGroup cols={2}>
+  <Card title="onboard" icon="wand-magic-sparkles" href="/cli/onboard">
+    Interactive first-run setup wizard
+  </Card>
+  <Card title="configure" icon="gear" href="/cli/configure">
+    Update configuration sections
+  </Card>
+</CardGroup>
+
+### Operations
+
+<CardGroup cols={2}>
+  <Card title="run" icon="play" href="/cli/run">
+    Bootstrap and run Paperclip server
+  </Card>
+  <Card title="doctor" icon="stethoscope" href="/cli/doctor">
+    Run diagnostic checks and repairs
+  </Card>
+</CardGroup>
+
+## Additional Commands
+
+### `env`
+Print environment variables for deployment:
+
+```bash
+paperclipai env
+```
+
+Generates an export block with all required and optional environment variables for production deployment.
+
+### `allowed-hostname`
+Add a hostname to the allowed list for authenticated/private mode:
+
+```bash
+paperclipai allowed-hostname macbook-pro
+```
+
+**Arguments:**
+- `<host>` - Hostname to allow (e.g., `dotta-macbook-pro`)
+
+### `heartbeat run`
+Run one agent heartbeat and stream live logs:
+
+```bash
+paperclipai heartbeat run --agent-id <agentId>
+```
+
+**Required Options:**
+- `--agent-id <agentId>` - Agent ID to invoke
+
+**Optional:**
+- `--source <source>` - Invocation source: `timer`, `assignment`, `on_demand`, `automation` (default: `on_demand`)
+- `--trigger <trigger>` - Trigger detail: `manual`, `ping`, `callback`, `system` (default: `manual`)
+- `--timeout-ms <ms>` - Max time to wait before giving up (default: `0` = no timeout)
+- `--json` - Output raw JSON where applicable
+- `--debug` - Show raw adapter stdout/stderr JSON chunks
+
+### `auth bootstrap-ceo`
+Create a one-time bootstrap invite URL for the first instance admin:
+
+```bash
+paperclipai auth bootstrap-ceo
+```
+
+**Options:**
+- `--force` - Create new invite even if admin already exists
+- `--expires-hours <hours>` - Invite expiration window in hours (default: 72, max: 720)
+- `--base-url <url>` - Public base URL used to print invite link
+
+<Note>
+This command is only required for `authenticated` deployment mode. It's skipped in `local_trusted` mode.
+</Note>
+
+## Client API Commands
+
+The CLI includes client commands for interacting with a running Paperclip instance:
+
+- **context** - Manage CLI context profiles
+- **company** - Company operations
+- **issue** - Issue management
+- **agent** - Agent operations
+- **approval** - Approval workflows
+- **activity** - Activity logs
+- **dashboard** - Dashboard views
+
+Use `--context <path>` or `--profile <name>` to specify connection details.
+
+## Configuration Files
+
+The CLI manages several configuration files:
+
+| File | Purpose | Default Location |
+|------|---------|------------------|
+| `config.json` | Main configuration | `~/.paperclip/instances/default/config.json` |
+| `.env.local` | JWT secret | `~/.paperclip/instances/default/.env.local` |
+| `master.key` | Secrets encryption key | `~/.paperclip/instances/default/secrets/master.key` |
+| `context.json` | CLI context profiles | `~/.paperclip/context.json` |
+
+## Environment Variables
+
+### `PAPERCLIP_HOME`
+Override the Paperclip home directory (default: `~/.paperclip`):
+
+```bash
+export PAPERCLIP_HOME=/custom/paperclip
+```
+
+### `PAPERCLIP_INSTANCE_ID`
+Set the instance ID for multi-instance setups (default: `default`):
+
+```bash
+export PAPERCLIP_INSTANCE_ID=production
+```
+
+### `PAPERCLIP_CONFIG`
+Explicit path to config file:
+
+```bash
+export PAPERCLIP_CONFIG=/etc/paperclip/config.json
+```
+
+## Instance Management
+
+Paperclip supports multiple isolated instances using the `PAPERCLIP_INSTANCE_ID` environment variable or `--instance` flag.
+
+Each instance has its own:
+- Configuration
+- Database (if using embedded-postgres)
+- Logs
+- Secrets
+- Storage
+
+**Example: Running multiple instances**
+
+```bash
+# Development instance
+PAPERCLIP_INSTANCE_ID=dev paperclipai run
+
+# Production instance
+PAPERCLIP_INSTANCE_ID=prod paperclipai run --instance prod
+```
+
+Instance data is stored in `~/.paperclip/instances/<instance-id>/`.
+
+## Troubleshooting
+
+### Command not found
+
+If `paperclipai` is not found after installation:
+
+1. Verify installation:
+   ```bash
+   npm list -g paperclipai
+   ```
+
+2. Check npm global bin path:
+   ```bash
+   npm config get prefix
+   ```
+
+3. Ensure global bin directory is in your PATH:
+   ```bash
+   echo $PATH
+   ```
+
+### Permission errors
+
+If you encounter permission errors during installation:
+
+```bash
+# Use npx instead of global install
+npx paperclipai onboard
+
+# Or fix npm permissions
+npm config set prefix ~/.npm-global
+export PATH=~/.npm-global/bin:$PATH
+```
+
+### Config file location
+
+Find your active config file:
+
+```bash
+paperclipai env | grep PAPERCLIP_CONFIG
+```
+
+View instance paths:
+
+```bash
+paperclipai onboard  # Shows paths in intro message
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Set up your instance" icon="rocket" href="/cli/onboard">
+    Run the interactive setup wizard
+  </Card>
+  <Card title="Diagnose issues" icon="wrench" href="/cli/doctor">
+    Check your Paperclip installation
+  </Card>
+</CardGroup>

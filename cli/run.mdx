@@ -1,0 +1,566 @@
+---
+title: 'paperclipai run'
+description: 'Bootstrap local setup and run the Paperclip server'
+---
+
+## Overview
+
+The `run` command is the primary way to start your Paperclip instance. It automatically handles onboarding (if needed), runs diagnostic checks, and starts the server. This is the command you'll use most often in development and production.
+
+## Syntax
+
+```bash
+paperclipai run [options]
+```
+
+## Options
+
+### `--config <path>`
+Path to config file.
+
+**Default:** `~/.paperclip/instances/default/config.json`
+
+```bash
+paperclipai run --config /etc/paperclip/config.json
+```
+
+### `--data-dir <path>`
+Paperclip data directory root. Isolates state from `~/.paperclip`.
+
+```bash
+paperclipai run --data-dir /custom/data
+```
+
+### `--instance <id>`
+Local instance ID. Useful for running multiple isolated instances.
+
+**Default:** `default`
+
+**Allowed characters:** Letters, numbers, `_`, and `-`
+
+```bash
+paperclipai run --instance production
+```
+
+### `--repair`
+Attempt automatic repairs during doctor checks.
+
+**Default:** `true`
+
+```bash
+paperclipai run --repair
+```
+
+### `--no-repair`
+Disable automatic repairs during doctor checks.
+
+```bash
+paperclipai run --no-repair
+```
+
+## What It Does
+
+The `run` command executes a three-phase startup sequence:
+
+### 1. Setup Validation
+
+Checks for existing configuration:
+
+```
+┌  paperclipai run
+│
+│  Home: /home/user/.paperclip
+│  Instance: default
+│  Config: /home/user/.paperclip/instances/default/config.json
+│
+```
+
+- Creates home directory if missing
+- Creates instance directory if missing
+- Checks for config file
+
+### 2. Auto-Onboarding
+
+If no config is found:
+
+**Interactive terminal:**
+```
+▲  No config found. Starting onboarding...
+```
+
+Runs `paperclipai onboard` automatically, then continues.
+
+**Non-interactive terminal (CI/automated):**
+```
+✖  No config found and terminal is non-interactive.
+│  Run paperclipai onboard once, then retry paperclipai run.
+```
+
+Exits with code 1.
+
+### 3. Health Checks
+
+Runs `paperclipai doctor` with automatic repairs:
+
+```
+▲  Running doctor checks...
+│
+✓ Config file: Valid config at /home/user/.paperclip/instances/default/config.json
+✓ Deployment/auth mode: local_trusted mode (no authentication required)
+✓ Agent JWT secret: PAPERCLIP_AGENT_JWT_SECRET configured
+✓ Secrets adapter: Local encrypted secrets configured
+✓ Storage adapter: Local disk storage configured at /home/user/.paperclip/instances/default/data/storage
+✓ Database: Embedded Postgres will start on port 54329
+✓ LLM provider: Claude configured (API key present)
+✓ Log directory: /home/user/.paperclip/instances/default/logs
+✓ Server port: Port 3100 is available
+│
+┌  Summary
+│  9 passed
+│
+```
+
+If any checks fail and can't be auto-repaired:
+
+```
+✖  Doctor found blocking issues. Not starting server.
+```
+
+Exits with code 1.
+
+### 4. Server Start
+
+If all checks pass:
+
+```
+▲  Starting Paperclip server...
+```
+
+The server process takes over and outputs:
+
+```
+🔌 Paperclip API listening on http://127.0.0.1:3100
+🌐 UI available at http://127.0.0.1:3100
+📊 Database: embedded-postgres (port 54329)
+✨ Ready for requests
+```
+
+<Note>
+The server runs in the foreground. Press `Ctrl+C` to stop.
+</Note>
+
+## Examples
+
+### Start default instance
+
+```bash
+paperclipai run
+```
+
+Starts with defaults:
+- Instance: `default`
+- Config: `~/.paperclip/instances/default/config.json`
+- Auto-repair: enabled
+
+### Start specific instance
+
+```bash
+paperclipai run --instance staging
+```
+
+Uses configuration from `~/.paperclip/instances/staging/config.json`.
+
+### Custom config path
+
+```bash
+paperclipai run --config /etc/paperclip/prod.json
+```
+
+Overrides default config location.
+
+### Disable auto-repair
+
+```bash
+paperclipai run --no-repair
+```
+
+Doctor will only report issues without attempting fixes.
+
+### Multiple instances
+
+Run multiple instances simultaneously:
+
+```bash
+# Terminal 1: Development
+PAPERCLIP_INSTANCE_ID=dev paperclipai run
+
+# Terminal 2: Staging
+PAPERCLIP_INSTANCE_ID=staging paperclipai run
+```
+
+Each instance needs:
+- Unique instance ID
+- Unique port (configure in `config.json`)
+- Separate database (if using embedded-postgres)
+
+## Environment Variables
+
+These environment variables affect `run` behavior:
+
+### `PAPERCLIP_INSTANCE_ID`
+Sets the instance ID.
+
+```bash
+PAPERCLIP_INSTANCE_ID=production paperclipai run
+```
+
+### `PAPERCLIP_CONFIG`
+Explicit config file path.
+
+```bash
+PAPERCLIP_CONFIG=/etc/paperclip/config.json paperclipai run
+```
+
+### `PAPERCLIP_HOME`
+Override home directory.
+
+```bash
+PAPERCLIP_HOME=/opt/paperclip paperclipai run
+```
+
+### `PAPERCLIP_OPEN_ON_LISTEN`
+Auto-open browser when server starts (set internally by onboard).
+
+```bash
+PAPERCLIP_OPEN_ON_LISTEN=true paperclipai run
+```
+
+### `PAPERCLIP_UI_DEV_MIDDLEWARE`
+Enable UI development middleware (auto-detected in monorepo).
+
+```bash
+PAPERCLIP_UI_DEV_MIDDLEWARE=true paperclipai run
+```
+
+## Server Modes
+
+### Development Mode
+
+If running from the monorepo workspace:
+
+```bash
+cd /path/to/paperclip-monorepo
+paperclipai run
+```
+
+**Behavior:**
+- Imports `server/src/index.ts` directly
+- Enables UI dev middleware
+- Supports hot reloading (with tsx/nodemon)
+
+### Production Mode
+
+If installed globally or using published package:
+
+```bash
+paperclipai run
+```
+
+**Behavior:**
+- Imports `@paperclipai/server` package
+- Serves pre-built UI assets
+- Production-optimized
+
+## Server Output
+
+### Successful Start
+
+```
+Paperclip v0.2.5
+🔌 Paperclip API listening on http://127.0.0.1:3100
+🌐 UI available at http://127.0.0.1:3100
+📊 Database: embedded-postgres (port 54329)
+📝 Logs: /home/user/.paperclip/instances/default/logs
+💾 Storage: local_disk (/home/user/.paperclip/instances/default/data/storage)
+🔐 Mode: local_trusted
+✨ Ready for requests
+```
+
+### Request Logs
+
+HTTP requests are logged:
+
+```
+GET /api/companies 200 12ms
+POST /api/agents 201 45ms
+GET /api/heartbeat-runs/abc123/events 200 8ms
+```
+
+### Database Migrations
+
+On first start or schema changes:
+
+```
+📊 Running database migrations...
+✓ Applied 3 migrations
+```
+
+## Stopping the Server
+
+### Graceful Shutdown
+
+Press `Ctrl+C` to trigger graceful shutdown:
+
+```
+^C
+⏸  Shutting down gracefully...
+✓ Closed database connections
+✓ Stopped heartbeat scheduler
+✓ Server stopped
+```
+
+### Force Kill
+
+If graceful shutdown hangs, press `Ctrl+C` again:
+
+```
+^C^C
+✖ Force stopping server
+```
+
+## Troubleshooting
+
+### Port already in use
+
+```
+Error: listen EADDRINUSE: address already in use 127.0.0.1:3100
+```
+
+**Solutions:**
+
+1. Check what's using the port:
+   ```bash
+   lsof -i :3100
+   # or
+   netstat -tuln | grep 3100
+   ```
+
+2. Kill the conflicting process:
+   ```bash
+   kill <PID>
+   ```
+
+3. Change the port:
+   ```bash
+   paperclipai configure --section server
+   # Select a different port
+   ```
+
+### Database connection failed
+
+```
+✖ Database: Connection failed
+```
+
+**For embedded-postgres:**
+
+1. Check logs:
+   ```bash
+   tail -f ~/.paperclip/instances/default/logs/server.log
+   ```
+
+2. Verify port is available:
+   ```bash
+   lsof -i :54329
+   ```
+
+3. Reset database:
+   ```bash
+   # Stop server
+   # Remove DB directory
+   rm -rf ~/.paperclip/instances/default/db
+   # Restart
+   paperclipai run
+   ```
+
+**For external postgres:**
+
+1. Test connection manually:
+   ```bash
+   psql "postgres://user:pass@host:5432/dbname"
+   ```
+
+2. Verify DATABASE_URL:
+   ```bash
+   paperclipai env | grep DATABASE_URL
+   ```
+
+3. Update connection:
+   ```bash
+   paperclipai configure --section database
+   ```
+
+### Server starts but UI not accessible
+
+**Check server config:**
+
+```bash
+paperclipai env | grep PORT
+```
+
+**Verify UI is enabled:**
+
+In `config.json`:
+```json
+{
+  "server": {
+    "serveUi": true
+  }
+}
+```
+
+**Try different host:**
+
+If bound to `127.0.0.1`, only accessible locally. For network access:
+
+```bash
+paperclipai configure --section server
+# Set host to 0.0.0.0
+```
+
+<Warning>
+**Security:** Only bind to `0.0.0.0` in trusted networks or with proper authentication.
+</Warning>
+
+### Module not found error
+
+```
+Error: Could not locate a Paperclip server entrypoint.
+Tried: /path/to/server/src/index.ts, @paperclipai/server
+```
+
+**Solutions:**
+
+1. Reinstall dependencies:
+   ```bash
+   npm install -g paperclipai
+   ```
+
+2. Verify installation:
+   ```bash
+   npm list -g @paperclipai/server
+   ```
+
+3. Use npx instead:
+   ```bash
+   npx paperclipai run
+   ```
+
+### Doctor fails with blocking issues
+
+```
+✖ Doctor found blocking issues. Not starting server.
+```
+
+Run doctor separately to see details:
+
+```bash
+paperclipai doctor --repair
+```
+
+Fix issues manually and retry:
+
+```bash
+paperclipai run
+```
+
+## Production Deployment
+
+For production deployments:
+
+### Using systemd
+
+Create `/etc/systemd/system/paperclip.service`:
+
+```ini
+[Unit]
+Description=Paperclip AI Control Plane
+After=network.target
+
+[Service]
+Type=simple
+User=paperclip
+WorkingDirectory=/opt/paperclip
+Environment="PAPERCLIP_CONFIG=/etc/paperclip/config.json"
+Environment="NODE_ENV=production"
+ExecStart=/usr/bin/paperclipai run --no-repair
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl enable paperclip
+sudo systemctl start paperclip
+sudo systemctl status paperclip
+```
+
+### Using Docker
+
+Create `Dockerfile`:
+
+```dockerfile
+FROM node:20-alpine
+
+RUN npm install -g paperclipai
+
+WORKDIR /app
+COPY config.json /app/config.json
+
+EXPOSE 3100
+
+CMD ["paperclipai", "run", "--config", "/app/config.json"]
+```
+
+Build and run:
+
+```bash
+docker build -t paperclip .
+docker run -p 3100:3100 -v paperclip-data:/data paperclip
+```
+
+### Environment Variables for Production
+
+Set these in production:
+
+```bash
+export DATABASE_URL="postgres://user:pass@db-host:5432/paperclip"
+export PAPERCLIP_AGENT_JWT_SECRET="<secure-secret>"
+export PAPERCLIP_CONFIG="/etc/paperclip/config.json"
+export NODE_ENV="production"
+export PORT="3100"
+```
+
+Generate export block:
+
+```bash
+paperclipai env
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Verify health" icon="stethoscope" href="/cli/doctor">
+    Run diagnostic checks on your running instance
+  </Card>
+  <Card title="Update config" icon="gear" href="/cli/configure">
+    Modify configuration without stopping
+  </Card>
+  <Card title="Production setup" icon="server" href="/deployment/production">
+    Deploy to production environments
+  </Card>
+</CardGroup>

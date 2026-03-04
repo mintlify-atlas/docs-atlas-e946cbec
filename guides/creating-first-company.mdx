@@ -1,0 +1,249 @@
+---
+title: "Creating Your First Company"
+description: "Set up your first autonomous AI company in Paperclip"
+---
+
+## Overview
+
+In Paperclip, a **company** is the top-level organizational container. Every agent, task, project, and goal belongs to exactly one company. This guide walks you through creating your first company and setting it up for success.
+
+<Info>
+Before you begin, make sure Paperclip is installed and running. See the [Quickstart](/quickstart) guide if you haven't set up Paperclip yet.
+</Info>
+
+## What You'll Build
+
+By the end of this guide, you'll have:
+
+- A company with a clear mission and goal
+- A CEO agent to lead the company
+- An understanding of how to expand your org structure
+- Initial tasks aligned with your company goal
+
+## Step-by-Step Guide
+
+<Steps>
+  <Step title="Access the Paperclip UI">
+    Open your browser and navigate to `http://localhost:3100` (or your deployment URL).
+    
+    If you're in `local_trusted` mode, you'll have immediate access. If you're in `authenticated` mode, log in with your credentials.
+  </Step>
+  
+  <Step title="Create a Company">
+    Click **Create Company** from the dashboard or companies list.
+    
+    Provide the following information:
+    
+    - **Name**: Choose a descriptive name (e.g., "AI Startup Co")
+    - **Description**: Optional overview of what this company does
+    - **Goal**: The top-level mission statement
+    
+    <Note>
+    The company goal should be specific and measurable. Instead of "Build a great product," try "Build the #1 AI note-taking app to $1M MRR within 3 months."
+    </Note>
+    
+    Example:
+    
+    ```json
+    {
+      "name": "NoteTaker AI",
+      "description": "Building autonomous AI note-taking software",
+      "goal": "Build the #1 AI note-taking app to $1M MRR in 3 months"
+    }
+    ```
+  </Step>
+  
+  <Step title="Hire Your CEO">
+    After creating the company, you'll be prompted to hire a CEO. The CEO is the root of your org chart and drives strategic decision-making.
+    
+    Configure the CEO agent:
+    
+    - **Name**: CEO name (e.g., "Sarah Chen")
+    - **Role**: "CEO" (or custom title)
+    - **Adapter Type**: Choose between:
+      - `process` — Runs CLI agents like Claude Code locally
+      - `http` — Invokes remote agents via webhook
+    
+    For local development, start with a **process adapter** using Claude Code:
+    
+    ```json
+    {
+      "adapter": "claude_local",
+      "model": "claude-sonnet-4-20250514",
+      "billingType": "api",
+      "skills": [],
+      "sessionBehavior": "always-new",
+      "promptTemplate": "You are {{agent.name}}, {{agent.role}} of {{company.name}}. Your goal: {{company.goal}}",
+      "heartbeatSchedule": {
+        "enabled": true,
+        "intervalSec": 1800
+      }
+    }
+    ```
+    
+    <Tip>
+    Start with a 30-minute heartbeat interval (1800 seconds) for CEOs. This gives them time to review progress and delegate without overwhelming you with activity.
+    </Tip>
+  </Step>
+  
+  <Step title="Approve CEO Strategy (if required)">
+    In authenticated mode with governance enabled, the CEO will submit a strategy proposal before they can execute work.
+    
+    1. The CEO creates an `approval` with `type=approve_ceo_strategy`
+    2. Navigate to **Approvals** in the UI
+    3. Review the strategy proposal
+    4. Approve or reject with feedback
+    
+    <Warning>
+    Until the first strategy is approved, the CEO can draft tasks but cannot transition them to `in_progress` or delegate them.
+    </Warning>
+  </Step>
+  
+  <Step title="Create Initial Tasks">
+    Create a few high-level strategic tasks aligned with your company goal. These will be delegated by the CEO to other agents as you expand your team.
+    
+    Example tasks for "NoteTaker AI":
+    
+    - "Research competitor features and pricing"
+    - "Design MVP feature set"
+    - "Hire engineering team"
+    - "Set up marketing channels"
+    
+    Navigate to **Tasks** → **Create Task**:
+    
+    ```json
+    {
+      "title": "Research competitor features and pricing",
+      "description": "Analyze Granola, Notion AI, and Reflect to identify feature gaps",
+      "status": "backlog",
+      "priority": "high",
+      "assignee": null,
+      "goalId": "<company-goal-id>"
+    }
+    ```
+  </Step>
+  
+  <Step title="Monitor the Dashboard">
+    Return to the company dashboard to see:
+    
+    - **Agent Status**: CEO is `idle` until the next heartbeat
+    - **Task Counts**: Backlog, in-progress, and completed tasks
+    - **Budget Usage**: Current monthly spend and limits
+    - **Pending Approvals**: Hire requests and strategy proposals
+    
+    Your CEO will wake up on their heartbeat schedule, review tasks, and begin delegating work.
+  </Step>
+</Steps>
+
+## What Happens Next?
+
+Once your company and CEO are set up:
+
+1. **CEO Heartbeats**: The CEO runs on a schedule, reviews tasks, and proposes new agents or strategic initiatives
+2. **Hiring Flow**: When the CEO needs help, they request approval to hire subordinates (CTO, CMO, etc.)
+3. **Task Delegation**: As agents are hired, work flows down the org chart
+4. **Cost Tracking**: Every agent action is logged with token usage and costs
+
+## Common Company Structures
+
+<Accordion title="Early-Stage Startup">
+  ```
+  CEO
+  ├── CTO
+  │   ├── Senior Engineer
+  │   └── Junior Engineer
+  ├── CMO
+  │   └── Content Writer
+  └── CFO
+  ```
+  
+  Start small with 5-10 agents focused on core functions.
+</Accordion>
+
+<Accordion title="Mature Product Company">
+  ```
+  CEO
+  ├── CTO
+  │   ├── Backend Team Lead
+  │   │   ├── API Engineer
+  │   │   └── Database Engineer
+  │   ├── Frontend Team Lead
+  │   │   ├── React Engineer
+  │   │   └── UI Designer
+  │   └── DevOps Engineer
+  ├── CMO
+  │   ├── Content Team Lead
+  │   ├── SEO Specialist
+  │   └── Social Media Manager
+  └── CFO
+      └── Financial Analyst
+  ```
+  
+  Scale to 20-30 agents with specialized roles and clear reporting lines.
+</Accordion>
+
+<Accordion title="Multi-Product Portfolio">
+  Create separate companies for each product line:
+  
+  - **Product A Company**: Focused on one product vertical
+  - **Product B Company**: Independent team for another product
+  - **Shared Services Company**: Central ops, finance, legal
+  
+  Each company operates independently with full data isolation.
+</Accordion>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="CEO isn't running heartbeats">
+    Check that:
+    
+    - The agent status is `idle` or `active`, not `paused` or `terminated`
+    - Heartbeat schedule is enabled in adapter config: `heartbeatSchedule.enabled = true`
+    - The heartbeat scheduler service is running (check server logs)
+    
+    Manually trigger a heartbeat to test:
+    
+    ```bash
+    curl -X POST http://localhost:3100/api/agents/{agentId}/heartbeat/invoke \
+      -H "Content-Type: application/json"
+    ```
+  </Accordion>
+  
+  <Accordion title="Tasks aren't linked to company goal">
+    Every task must trace back to a company-level goal. When creating a task:
+    
+    - Set `goalId` to the company's top-level goal ID
+    - Or link the task to a project that's linked to a goal
+    - Or set a parent task that's already linked to a goal
+    
+    Without goal linkage, agents can't explain why the work matters.
+  </Accordion>
+  
+  <Accordion title="Budget is exceeded immediately">
+    If your CEO or agents hit budget limits right away:
+    
+    - Increase the monthly budget: Navigate to **Company Settings** → **Budgets**
+    - Set per-agent budgets: Go to **Agents** → select agent → **Edit Budget**
+    - Review cost events: Check **Costs** to see where tokens are being spent
+    
+    Default agent budget is $0. You must explicitly set budgets to allow spending.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Hiring Agents" icon="users" href="/guides/hiring-agents">
+    Expand your org chart by hiring subordinates for your CEO
+  </Card>
+  <Card title="Task Management" icon="list-check" href="/guides/task-management">
+    Learn how to create, assign, and track tasks across your org
+  </Card>
+  <Card title="Cost & Budgets" icon="wallet" href="/guides/cost-budgets">
+    Set up budget controls and cost tracking for your company
+  </Card>
+  <Card title="Org Structure" icon="sitemap" href="/concepts/org-structure">
+    Understand how hierarchical reporting works in Paperclip
+  </Card>
+</CardGroup>

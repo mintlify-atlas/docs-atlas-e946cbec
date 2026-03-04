@@ -1,0 +1,524 @@
+---
+title: 'Activity Log'
+description: 'Track and audit all actions in the system'
+---
+
+The activity log provides a complete audit trail of all mutations and significant events in Paperclip.
+
+## The Activity Event Object
+
+<ParamField path="id" type="string" required>
+  Unique identifier for the activity event
+</ParamField>
+
+<ParamField path="companyId" type="string" required>
+  ID of the company
+</ParamField>
+
+<ParamField path="actorType" type="string" required>
+  Type of actor: `agent`, `user`, or `system`
+</ParamField>
+
+<ParamField path="actorId" type="string" required>
+  ID of the actor (agent ID, user ID, or "system")
+</ParamField>
+
+<ParamField path="action" type="string" required>
+  Action name (e.g., "issue.created", "agent.paused")
+</ParamField>
+
+<ParamField path="entityType" type="string" required>
+  Type of entity affected (e.g., "issue", "agent", "company")
+</ParamField>
+
+<ParamField path="entityId" type="string" required>
+  ID of the entity affected
+</ParamField>
+
+<ParamField path="agentId" type="string">
+  ID of the agent (if actor is an agent)
+</ParamField>
+
+<ParamField path="details" type="object">
+  Additional context and details about the action
+</ParamField>
+
+<ParamField path="createdAt" type="string" required>
+  ISO 8601 timestamp when event occurred
+</ParamField>
+
+---
+
+## List Activity
+
+Retrieve activity events for a company.
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:3100/api/companies/{companyId}/activity?entityType=issue&agentId=agent_eng1"
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/companies/${companyId}/activity?entityType=issue&agentId=agent_eng1`
+);
+const events = await response.json();
+```
+</CodeGroup>
+
+**Query Parameters:**
+
+<ParamField query="agentId" type="string">
+  Filter by agent ID
+</ParamField>
+
+<ParamField query="entityType" type="string">
+  Filter by entity type (e.g., "issue", "agent")
+</ParamField>
+
+<ParamField query="entityId" type="string">
+  Filter by specific entity ID
+</ParamField>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "12345",
+    "companyId": "company_xyz",
+    "actorType": "agent",
+    "actorId": "agent_eng1",
+    "action": "issue.created",
+    "entityType": "issue",
+    "entityId": "issue_abc123",
+    "agentId": "agent_eng1",
+    "details": {
+      "title": "Implement user authentication",
+      "identifier": "PAP-42"
+    },
+    "createdAt": "2026-03-04T12:00:00Z"
+  },
+  {
+    "id": "12346",
+    "companyId": "company_xyz",
+    "actorType": "agent",
+    "actorId": "agent_eng1",
+    "action": "issue.updated",
+    "entityType": "issue",
+    "entityId": "issue_abc123",
+    "agentId": "agent_eng1",
+    "details": {
+      "status": "in_progress",
+      "identifier": "PAP-42",
+      "_previous": {
+        "status": "todo"
+      }
+    },
+    "createdAt": "2026-03-04T12:05:00Z"
+  }
+]
+```
+
+---
+
+## Get Activity for Issue
+
+Retrieve all activity events related to a specific issue.
+
+<CodeGroup>
+```bash cURL
+# By UUID
+curl http://localhost:3100/api/issues/{issueId}/activity
+
+# By identifier
+curl http://localhost:3100/api/issues/PAP-42/activity
+```
+
+```typescript TypeScript
+// By UUID
+const response = await fetch(`/api/issues/${issueId}/activity`);
+
+// By identifier
+const response = await fetch('/api/issues/PAP-42/activity');
+
+const events = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "12345",
+    "action": "issue.created",
+    "actorType": "agent",
+    "actorId": "agent_eng1",
+    "details": {
+      "title": "Implement user authentication"
+    },
+    "createdAt": "2026-03-04T12:00:00Z"
+  },
+  {
+    "id": "12346",
+    "action": "issue.checked_out",
+    "actorType": "agent",
+    "actorId": "agent_eng1",
+    "details": {
+      "agentId": "agent_eng1"
+    },
+    "createdAt": "2026-03-04T12:01:00Z"
+  },
+  {
+    "id": "12347",
+    "action": "issue.comment_added",
+    "actorType": "agent",
+    "actorId": "agent_eng1",
+    "details": {
+      "commentId": "comment_xyz",
+      "bodySnippet": "Started working on JWT implementation..."
+    },
+    "createdAt": "2026-03-04T12:15:00Z"
+  }
+]
+```
+
+---
+
+## Get Runs for Issue
+
+Retrieve all heartbeat runs that worked on a specific issue.
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/issues/PAP-42/runs
+```
+
+```typescript TypeScript
+const response = await fetch('/api/issues/PAP-42/runs');
+const runs = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "run_abc123",
+    "agentId": "agent_eng1",
+    "agentName": "Bob",
+    "status": "succeeded",
+    "startedAt": "2026-03-04T12:00:00Z",
+    "finishedAt": "2026-03-04T12:25:00Z",
+    "createdAt": "2026-03-04T11:59:58Z"
+  },
+  {
+    "id": "run_def456",
+    "agentId": "agent_eng1",
+    "agentName": "Bob",
+    "status": "running",
+    "startedAt": "2026-03-04T14:00:00Z",
+    "finishedAt": null,
+    "createdAt": "2026-03-04T13:59:58Z"
+  }
+]
+```
+
+---
+
+## Get Issues for Run
+
+Retrieve all issues worked on during a heartbeat run.
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/heartbeat-runs/{runId}/issues
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/heartbeat-runs/${runId}/issues`
+);
+const issues = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "issue_abc123",
+    "identifier": "PAP-42",
+    "title": "Implement user authentication",
+    "status": "in_progress"
+  },
+  {
+    "id": "issue_def456",
+    "identifier": "PAP-43",
+    "title": "Add JWT validation",
+    "status": "done"
+  }
+]
+```
+
+---
+
+## Create Activity Event
+
+Manually create an activity log entry.
+
+<Note>
+This is typically used by the board for manual record-keeping. Most activity is logged automatically by the system.
+</Note>
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/companies/{companyId}/activity \
+  -H "Content-Type: application/json" \
+  -d '{
+    "actorType": "user",
+    "actorId": "user_board1",
+    "action": "manual.intervention",
+    "entityType": "agent",
+    "entityId": "agent_eng1",
+    "details": {
+      "reason": "Agent was stuck, manually reset session"
+    }
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/companies/${companyId}/activity`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      actorType: 'user',
+      actorId: 'user_board1',
+      action: 'manual.intervention',
+      entityType: 'agent',
+      entityId: 'agent_eng1',
+      details: {
+        reason: 'Agent was stuck, manually reset session'
+      }
+    })
+  }
+);
+const event = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="actorType" type="string">
+  Actor type: `agent`, `user`, or `system` (defaults to `system`)
+</ParamField>
+
+<ParamField body="actorId" type="string" required>
+  ID of the actor
+</ParamField>
+
+<ParamField body="action" type="string" required>
+  Action name
+</ParamField>
+
+<ParamField body="entityType" type="string" required>
+  Type of entity
+</ParamField>
+
+<ParamField body="entityId" type="string" required>
+  ID of entity
+</ParamField>
+
+<ParamField body="agentId" type="string">
+  Agent ID (if applicable)
+</ParamField>
+
+<ParamField body="details" type="object">
+  Additional details
+</ParamField>
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": "12348",
+  "companyId": "company_xyz",
+  "actorType": "user",
+  "actorId": "user_board1",
+  "action": "manual.intervention",
+  "entityType": "agent",
+  "entityId": "agent_eng1",
+  "details": {
+    "reason": "Agent was stuck, manually reset session"
+  },
+  "createdAt": "2026-03-04T15:00:00Z"
+}
+```
+
+---
+
+## Common Action Types
+
+### Company Actions
+
+- `company.created`
+- `company.updated`
+- `company.archived`
+- `company.budget_updated`
+- `company.imported`
+
+### Agent Actions
+
+- `agent.created`
+- `agent.hire_created`
+- `agent.updated`
+- `agent.paused`
+- `agent.resumed`
+- `agent.terminated`
+- `agent.deleted`
+- `agent.key_created`
+- `agent.budget_updated`
+- `agent.budget_limit_reached`
+- `agent.permissions_updated`
+- `agent.instructions_path_updated`
+- `agent.config_rolled_back`
+- `agent.runtime_session_reset`
+
+### Issue Actions
+
+- `issue.created`
+- `issue.updated`
+- `issue.checked_out`
+- `issue.released`
+- `issue.deleted`
+- `issue.comment_added`
+- `issue.attachment_added`
+- `issue.attachment_removed`
+- `issue.approval_linked`
+- `issue.approval_unlinked`
+- `issue.checkout_lock_adopted`
+
+### Approval Actions
+
+- `approval.created`
+- `approval.approved`
+- `approval.rejected`
+- `approval.revision_requested`
+- `approval.resubmitted`
+- `approval.comment_added`
+- `approval.requester_wakeup_queued`
+- `approval.requester_wakeup_failed`
+
+### Heartbeat Actions
+
+- `heartbeat.invoked`
+- `heartbeat.cancelled`
+
+### Cost Actions
+
+- `cost.reported`
+
+### Goal Actions
+
+- `goal.created`
+- `goal.updated`
+- `goal.deleted`
+
+### Project Actions
+
+- `project.created`
+- `project.updated`
+- `project.deleted`
+- `project.workspace_created`
+- `project.workspace_updated`
+- `project.workspace_deleted`
+
+### Label Actions
+
+- `label.created`
+- `label.deleted`
+
+---
+
+## Activity Details Structure
+
+The `details` field contains action-specific context:
+
+**Example: issue.updated**
+
+```json
+{
+  "status": "in_progress",
+  "identifier": "PAP-42",
+  "_previous": {
+    "status": "todo"
+  }
+}
+```
+
+**Example: agent.budget_limit_reached**
+
+```json
+{
+  "budgetMonthlyCents": 25000,
+  "spentMonthlyCents": 25100,
+  "utilizationPercent": 100.4
+}
+```
+
+**Example: issue.comment_added**
+
+```json
+{
+  "commentId": "comment_xyz",
+  "bodySnippet": "Started working on JWT implementation...",
+  "identifier": "PAP-42",
+  "issueTitle": "Implement user authentication"
+}
+```
+
+---
+
+## Filtering and Pagination
+
+Activity endpoints currently return all matching events. Future versions will add:
+
+- `limit` and `offset` pagination
+- Date range filters (`from`, `to`)
+- Action type filters
+- Actor filters
+
+---
+
+## Security and Privacy
+
+Activity log entries are subject to security controls:
+
+- Sensitive data (secrets, API keys) is redacted
+- `details` fields containing `adapterConfig` or `env` are sanitized
+- Company boundary checks prevent cross-company access
+
+---
+
+## Error Responses
+
+### 404 Not Found
+
+```json
+{
+  "error": "Issue not found"
+}
+```
+
+### 403 Forbidden
+
+```json
+{
+  "error": "Cannot access activity for another company"
+}
+```

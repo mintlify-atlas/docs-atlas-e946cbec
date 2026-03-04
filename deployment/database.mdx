@@ -1,0 +1,479 @@
+---
+title: Database Setup
+description: Configure PostgreSQL, run migrations, and manage database connections
+---
+
+Paperclip uses PostgreSQL via [Drizzle ORM](https://orm.drizzle.team/). Choose from embedded PostgreSQL, local Docker, or hosted providers.
+
+## Database Modes
+
+Three deployment options:
+
+1. **Embedded PostgreSQL** - Zero config, auto-managed (default)
+2. **Local PostgreSQL** - Docker Compose for development
+3. **Hosted PostgreSQL** - Supabase, AWS RDS, etc. for production
+
+## Embedded PostgreSQL
+
+The simplest option - no setup required.
+
+### How It Works
+
+1. Leave `DATABASE_URL` unset
+2. Server auto-starts embedded PostgreSQL
+3. Data persists in `~/.paperclip/instances/default/db/`
+
+```bash
+# Just run - embedded DB starts automatically
+pnpm dev
+```
+
+### Configuration
+
+**Data directory:**
+```bash
+PAPERCLIP_HOME=~/.paperclip
+PAPERCLIP_INSTANCE_ID=default
+```
+
+Data location: `$PAPERCLIP_HOME/instances/$PAPERCLIP_INSTANCE_ID/db/`
+
+**Custom port (if default 54329 conflicts):**
+```json
+// ~/.paperclip/instances/default/config.json
+{
+  "database": {
+    "embeddedPostgresPort": 54330
+  }
+}
+```
+
+### Reset Embedded Database
+
+```bash
+rm -rf ~/.paperclip/instances/default/db
+pnpm dev
+```
+
+Database recreates automatically on startup.
+
+### When to Use
+
+- ✅ Local development
+- ✅ Testing and demos
+- ✅ Single-machine deployments
+- ❌ High-traffic production
+- ❌ Multi-instance deployments
+
+## Local PostgreSQL (Docker)
+
+For development with a full PostgreSQL server.
+
+### Setup
+
+**Start PostgreSQL:**
+```bash
+docker compose up -d
+```
+
+This starts PostgreSQL 17 on `localhost:5432`.
+
+**Set connection string:**
+```bash
+cp .env.example .env
+```
+
+**.env:**
+```bash
+DATABASE_URL=postgres://paperclip:paperclip@localhost:5432/paperclip
+```
+
+**Push schema:**
+```bash
+DATABASE_URL=postgres://paperclip:paperclip@localhost:5432/paperclip \
+  npx drizzle-kit push
+```
+
+**Start server:**
+```bash
+pnpm dev
+```
+
+### docker-compose.yml
+
+Included in the repo:
+
+```yaml
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: paperclip
+      POSTGRES_PASSWORD: paperclip
+      POSTGRES_DB: paperclip
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+```
+
+### When to Use
+
+- ✅ Team development
+- ✅ Testing migrations
+- ✅ Matching production setup locally
+- ❌ Quick local experiments (use embedded instead)
+
+## Hosted PostgreSQL
+
+For production deployments.
+
+### Supabase
+
+**1. Create project:**
+- Visit [database.new](https://database.new)
+- Create a new project
+- Wait for provisioning (~2 minutes)
+
+**2. Get connection string:**
+- Go to **Project Settings > Database > Connection string**
+- Copy **Connection pooling** URL (port 6543)
+
+**3. Configure Drizzle for pooling:**
+
+Edit `packages/db/src/client.ts`:
+
+```typescript
+export function createDb(url: string) {
+  const sql = postgres(url, { prepare: false }); // Disable prepared statements
+  return drizzlePg(sql, { schema });
+}
+```
+
+**4. Set environment variable:**
+
+```bash
+# Application connection (pooled)
+DATABASE_URL=postgres://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
+```
+
+**5. Push schema (use direct connection):**
+
+```bash
+# Direct connection for migrations (port 5432)
+DATABASE_URL=postgres://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres \
+  npx drizzle-kit push
+```
+
+**Supabase free tier:**
+- 500 MB database storage
+- 200 concurrent connections
+- Projects pause after 1 week of inactivity
+
+### AWS RDS
+
+**1. Create RDS instance:**
+```bash
+# Via AWS Console or CLI
+aws rds create-db-instance \
+  --db-instance-identifier paperclip-prod \
+  --db-instance-class db.t3.micro \
+  --engine postgres \
+  --engine-version 17.2 \
+  --master-username paperclip \
+  --master-user-password <PASSWORD> \
+  --allocated-storage 20
+```
+
+**2. Configure security group:**
+- Allow inbound PostgreSQL (port 5432) from your deployment
+
+**3. Set connection string:**
+```bash
+DATABASE_URL=postgres://paperclip:<PASSWORD>@paperclip-prod.abc123.us-east-1.rds.amazonaws.com:5432/postgres
+```
+
+### Other Providers
+
+Any PostgreSQL 17+ provider works:
+
+| Provider | Best For | Notes |
+|----------|----------|-------|
+| **Neon** | Serverless | Auto-scaling, generous free tier |
+| **Railway** | Simplicity | One-click Postgres plugin |
+| **Google Cloud SQL** | GCP deployments | Managed backups |
+| **Azure Database** | Azure deployments | Integrated security |
+| **DigitalOcean** | Cost-effective | Simple pricing |
+
+**General setup:**
+1. Create PostgreSQL 17+ instance
+2. Get connection string
+3. Set `DATABASE_URL`
+4. Push schema with `drizzle-kit push`
+
+## Migrations
+
+### Automatic Migrations
+
+On startup, Paperclip automatically runs migrations if:
+- Database is empty (fresh install)
+- `PAPERCLIP_MIGRATION_PROMPT=never` is set
+
+### Manual Migrations
+
+**Generate migration from schema changes:**
+
+```bash
+pnpm db:generate
+```
+
+This reads `packages/db/src/schema/*.ts` and generates SQL in `packages/db/src/migrations/`.
+
+**Apply migrations:**
+
+```bash
+pnpm db:migrate
+```
+
+Or use `drizzle-kit push` to sync schema directly (for development):
+
+```bash
+DATABASE_URL=postgres://... npx drizzle-kit push
+```
+
+### Migration Workflow
+
+**1. Edit schema:**
+
+```typescript
+// packages/db/src/schema/my-table.ts
+export const myTable = pgTable('my_table', {
+  id: text('id').primaryKey(),
+  newColumn: text('new_column'), // Add this
+});
+```
+
+**2. Export from schema index:**
+
+```typescript
+// packages/db/src/schema/index.ts
+export * from './my-table.js';
+```
+
+**3. Generate migration:**
+
+```bash
+pnpm db:generate
+```
+
+**4. Review generated SQL:**
+
+```bash
+cat packages/db/src/migrations/0024_*.sql
+```
+
+**5. Apply migration:**
+
+```bash
+pnpm db:migrate
+```
+
+**6. Verify TypeScript compiles:**
+
+```bash
+pnpm -r typecheck
+```
+
+### Migration Files
+
+Migrations are stored in `packages/db/src/migrations/`:
+
+```
+packages/db/src/migrations/
+├── 0000_mature_masked_marvel.sql
+├── 0001_fast_northstar.sql
+├── 0002_big_zaladane.sql
+└── ...
+```
+
+Each migration is a timestamped SQL file that modifies the schema.
+
+## Database Schema
+
+Core tables:
+
+- **companies** - Company entities
+- **agents** - AI agents
+- **tasks** - Work items
+- **issues** - Issue tracking
+- **goals** - Company goals
+- **projects** - Project organization
+- **agent_api_keys** - Agent authentication
+- **company_secrets** - Secret storage
+- **company_secret_versions** - Secret versioning
+- **activity_log** - Audit trail
+- **authUsers** - User authentication
+- **authSessions** - Session management
+- **instance_user_roles** - Instance permissions
+- **company_memberships** - Company access
+
+Full schema: `packages/db/src/schema/`
+
+## Connection Management
+
+### Connection Pooling
+
+For hosted databases, use connection pooling:
+
+**Supabase:**
+```bash
+# Use port 6543 (pooled)
+DATABASE_URL=postgres://...pooler.supabase.com:6543/postgres
+```
+
+**Disable prepared statements:**
+```typescript
+// packages/db/src/client.ts
+const sql = postgres(url, { prepare: false });
+```
+
+### Connection Limits
+
+PostgreSQL default: 100 connections
+
+Paperclip uses 1-2 connections per server instance.
+
+For high-traffic deployments:
+- Use connection pooling (PgBouncer, Supabase Pooler)
+- Scale PostgreSQL instance
+- Use read replicas for read-heavy workloads
+
+## Backup and Restore
+
+### Backup Embedded Database
+
+```bash
+./scripts/backup-db.sh
+```
+
+Or manually:
+```bash
+tar -czf paperclip-backup-$(date +%Y%m%d).tar.gz \
+  ~/.paperclip/instances/default/db
+```
+
+### Backup External Database
+
+```bash
+pg_dump $DATABASE_URL > paperclip-backup-$(date +%Y%m%d).sql
+```
+
+### Restore
+
+**Embedded:**
+```bash
+rm -rf ~/.paperclip/instances/default/db
+tar -xzf paperclip-backup-20260304.tar.gz -C ~/.paperclip/instances/default/
+```
+
+**External:**
+```bash
+psql $DATABASE_URL < paperclip-backup-20260304.sql
+```
+
+## Troubleshooting
+
+### Connection Refused
+
+**Check PostgreSQL is running:**
+```bash
+docker compose ps
+```
+
+**Check connection string:**
+```bash
+echo $DATABASE_URL
+```
+
+**Test connection:**
+```bash
+psql $DATABASE_URL -c "SELECT version();"
+```
+
+### Migration Failures
+
+**Reset and retry:**
+```bash
+# Embedded
+rm -rf ~/.paperclip/instances/default/db
+pnpm dev
+
+# External
+DATABASE_URL=postgres://... npx drizzle-kit push --force
+```
+
+### Too Many Connections
+
+**Use connection pooling:**
+- Supabase: Use port 6543
+- Deploy PgBouncer
+- Upgrade database instance
+
+**Check active connections:**
+```sql
+SELECT count(*) FROM pg_stat_activity;
+```
+
+### Slow Queries
+
+**Enable query logging:**
+```typescript
+// packages/db/src/client.ts
+const sql = postgres(url, { 
+  debug: (connection, query, params) => {
+    console.log({ query, params });
+  }
+});
+```
+
+**Analyze query performance:**
+```sql
+EXPLAIN ANALYZE SELECT * FROM tasks WHERE company_id = '...';
+```
+
+## Production Checklist
+
+<Steps>
+  <Step title="Use hosted PostgreSQL">
+    Don't use embedded PostgreSQL in production.
+  </Step>
+  <Step title="Enable connection pooling">
+    Use pooled connections (port 6543 for Supabase).
+  </Step>
+  <Step title="Set up automated backups">
+    Use provider backups or `pg_dump` cron jobs.
+  </Step>
+  <Step title="Monitor connections">
+    Alert on connection count approaching limits.
+  </Step>
+  <Step title="Test disaster recovery">
+    Verify backup restoration works.
+  </Step>
+  <Step title="Use migrations in CI/CD">
+    Run `pnpm db:migrate` in deployment pipeline.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/deployment/configuration">
+    Configure database connection and runtime options
+  </Card>
+  <Card title="Security" icon="shield" href="/deployment/security">
+    Secure database credentials and access
+  </Card>
+</CardGroup>

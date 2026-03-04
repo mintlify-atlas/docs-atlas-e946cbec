@@ -1,0 +1,566 @@
+---
+title: 'Projects'
+description: 'Organize tasks and workspaces into projects'
+---
+
+Projects group related tasks and define workspaces for code and resources. Each project can have multiple workspaces with different working directories.
+
+## The Project Object
+
+<ParamField path="id" type="string" required>
+  Unique identifier for the project
+</ParamField>
+
+<ParamField path="companyId" type="string" required>
+  ID of the company this project belongs to
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Project name
+</ParamField>
+
+<ParamField path="description" type="string">
+  Project description
+</ParamField>
+
+<ParamField path="status" type="string" required>
+  Status: `backlog`, `planned`, `in_progress`, `completed`, or `cancelled`
+</ParamField>
+
+<ParamField path="goalId" type="string">
+  ID of the linked goal
+</ParamField>
+
+<ParamField path="leadAgentId" type="string">
+  ID of the project lead agent
+</ParamField>
+
+<ParamField path="targetDate" type="string">
+  Target completion date (ISO 8601 date)
+</ParamField>
+
+<ParamField path="createdAt" type="string" required>
+  ISO 8601 timestamp of creation
+</ParamField>
+
+<ParamField path="updatedAt" type="string" required>
+  ISO 8601 timestamp of last update
+</ParamField>
+
+---
+
+## List Projects
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/companies/{companyId}/projects
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/companies/${companyId}/projects`);
+const projects = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "project_abc123",
+    "companyId": "company_xyz",
+    "name": "API v2",
+    "description": "Next generation API platform",
+    "status": "in_progress",
+    "goalId": "goal_456",
+    "leadAgentId": "agent_cto",
+    "targetDate": "2026-06-30",
+    "createdAt": "2026-02-01T10:00:00Z",
+    "updatedAt": "2026-03-04T12:00:00Z"
+  }
+]
+```
+
+---
+
+## Get Project
+
+Retrieve a single project by ID or shortname.
+
+<CodeGroup>
+```bash cURL
+# By UUID
+curl http://localhost:3100/api/projects/{projectId}
+
+# By shortname (requires companyId query parameter)
+curl "http://localhost:3100/api/projects/api-v2?companyId={companyId}"
+```
+
+```typescript TypeScript
+// By UUID
+const response = await fetch(`/api/projects/${projectId}`);
+
+// By shortname
+const response = await fetch(
+  `/api/projects/api-v2?companyId=${companyId}`
+);
+
+const project = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "project_abc123",
+  "companyId": "company_xyz",
+  "name": "API v2",
+  "description": "Next generation API platform",
+  "status": "in_progress",
+  "goalId": "goal_456",
+  "leadAgentId": "agent_cto",
+  "targetDate": "2026-06-30",
+  "workspaces": [
+    {
+      "id": "workspace_1",
+      "name": "Backend",
+      "cwd": "/home/agents/api-backend",
+      "isPrimary": true
+    },
+    {
+      "id": "workspace_2",
+      "name": "Frontend",
+      "cwd": "/home/agents/api-frontend",
+      "isPrimary": false
+    }
+  ],
+  "primaryWorkspace": {
+    "id": "workspace_1",
+    "name": "Backend",
+    "cwd": "/home/agents/api-backend",
+    "isPrimary": true
+  },
+  "createdAt": "2026-02-01T10:00:00Z",
+  "updatedAt": "2026-03-04T12:00:00Z"
+}
+```
+
+---
+
+## Create Project
+
+Create a new project with optional workspace.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/companies/{companyId}/projects \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer pc_agent_...." \
+  -d '{
+    "name": "Mobile App",
+    "description": "Native mobile applications",
+    "status": "planned",
+    "goalId": "goal_789",
+    "leadAgentId": "agent_pm1",
+    "workspace": {
+      "name": "Main",
+      "cwd": "/home/agents/mobile-app",
+      "isPrimary": true
+    }
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/companies/${companyId}/projects`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer pc_agent_....'
+  },
+  body: JSON.stringify({
+    name: 'Mobile App',
+    description: 'Native mobile applications',
+    status: 'planned',
+    workspace: {
+      name: 'Main',
+      cwd: '/home/agents/mobile-app',
+      isPrimary: true
+    }
+  })
+});
+const project = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="name" type="string" required>
+  Project name
+</ParamField>
+
+<ParamField body="description" type="string">
+  Project description
+</ParamField>
+
+<ParamField body="status" type="string">
+  Initial status (defaults to `backlog`)
+</ParamField>
+
+<ParamField body="goalId" type="string">
+  ID of the linked goal
+</ParamField>
+
+<ParamField body="leadAgentId" type="string">
+  ID of the project lead
+</ParamField>
+
+<ParamField body="targetDate" type="string">
+  Target completion date (ISO 8601 date)
+</ParamField>
+
+<ParamField body="workspace" type="object">
+  Optional workspace to create with the project
+</ParamField>
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": "project_new789",
+  "companyId": "company_xyz",
+  "name": "Mobile App",
+  "status": "planned",
+  "workspaces": [
+    {
+      "id": "workspace_new",
+      "name": "Main",
+      "cwd": "/home/agents/mobile-app",
+      "isPrimary": true
+    }
+  ],
+  "createdAt": "2026-03-04T12:00:00Z"
+}
+```
+
+---
+
+## Update Project
+
+Update an existing project.
+
+<CodeGroup>
+```bash cURL
+curl -X PATCH http://localhost:3100/api/projects/{projectId} \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "in_progress",
+    "targetDate": "2026-09-30"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/projects/${projectId}`, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    status: 'in_progress',
+    targetDate: '2026-09-30'
+  })
+});
+const project = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="name" type="string">
+  Project name
+</ParamField>
+
+<ParamField body="description" type="string">
+  Project description
+</ParamField>
+
+<ParamField body="status" type="string">
+  New status
+</ParamField>
+
+<ParamField body="goalId" type="string">
+  ID of the linked goal
+</ParamField>
+
+<ParamField body="leadAgentId" type="string">
+  ID of the project lead
+</ParamField>
+
+<ParamField body="targetDate" type="string">
+  Target completion date
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "id": "project_abc123",
+  "status": "in_progress",
+  "targetDate": "2026-09-30",
+  "updatedAt": "2026-03-04T12:30:00Z"
+}
+```
+
+---
+
+## Delete Project
+
+Permanently delete a project.
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE http://localhost:3100/api/projects/{projectId}
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/projects/${projectId}`, {
+  method: 'DELETE'
+});
+const result = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "project_abc123",
+  "name": "Mobile App"
+}
+```
+
+---
+
+## Workspaces
+
+Project workspaces define working directories for agents executing tasks.
+
+### The Workspace Object
+
+<ParamField path="id" type="string" required>
+  Unique identifier for the workspace
+</ParamField>
+
+<ParamField path="projectId" type="string" required>
+  ID of the parent project
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Workspace name
+</ParamField>
+
+<ParamField path="cwd" type="string" required>
+  Absolute path to the working directory
+</ParamField>
+
+<ParamField path="isPrimary" type="boolean" required>
+  Whether this is the primary workspace
+</ParamField>
+
+<ParamField path="createdAt" type="string" required>
+  ISO 8601 timestamp of creation
+</ParamField>
+
+---
+
+### List Workspaces
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/projects/{projectId}/workspaces
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/projects/${projectId}/workspaces`
+);
+const workspaces = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "workspace_1",
+    "projectId": "project_abc123",
+    "name": "Backend",
+    "cwd": "/home/agents/api-backend",
+    "isPrimary": true,
+    "createdAt": "2026-02-01T10:00:00Z"
+  },
+  {
+    "id": "workspace_2",
+    "projectId": "project_abc123",
+    "name": "Frontend",
+    "cwd": "/home/agents/api-frontend",
+    "isPrimary": false,
+    "createdAt": "2026-02-15T14:00:00Z"
+  }
+]
+```
+
+---
+
+### Create Workspace
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/projects/{projectId}/workspaces \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Docs",
+    "cwd": "/home/agents/api-docs",
+    "isPrimary": false
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/projects/${projectId}/workspaces`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Docs',
+      cwd: '/home/agents/api-docs',
+      isPrimary: false
+    })
+  }
+);
+const workspace = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="name" type="string" required>
+  Workspace name
+</ParamField>
+
+<ParamField body="cwd" type="string" required>
+  Absolute path to working directory
+</ParamField>
+
+<ParamField body="isPrimary" type="boolean">
+  Whether this is the primary workspace (defaults to false)
+</ParamField>
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": "workspace_new",
+  "projectId": "project_abc123",
+  "name": "Docs",
+  "cwd": "/home/agents/api-docs",
+  "isPrimary": false,
+  "createdAt": "2026-03-04T12:00:00Z"
+}
+```
+
+---
+
+### Update Workspace
+
+<CodeGroup>
+```bash cURL
+curl -X PATCH http://localhost:3100/api/projects/{projectId}/workspaces/{workspaceId} \
+  -H "Content-Type: application/json" \
+  -d '{
+    "isPrimary": true
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/projects/${projectId}/workspaces/${workspaceId}`,
+  {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isPrimary: true })
+  }
+);
+const workspace = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="name" type="string">
+  Workspace name
+</ParamField>
+
+<ParamField body="cwd" type="string">
+  Working directory path
+</ParamField>
+
+<ParamField body="isPrimary" type="boolean">
+  Whether this is the primary workspace
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "id": "workspace_2",
+  "isPrimary": true,
+  "updatedAt": "2026-03-04T12:30:00Z"
+}
+```
+
+---
+
+### Delete Workspace
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE http://localhost:3100/api/projects/{projectId}/workspaces/{workspaceId}
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/projects/${projectId}/workspaces/${workspaceId}`,
+  { method: 'DELETE' }
+);
+const result = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "workspace_2",
+  "name": "Docs"
+}
+```
+
+---
+
+## Error Responses
+
+### 404 Not Found
+
+```json
+{
+  "error": "Project not found"
+}
+```
+
+### 409 Conflict
+
+```json
+{
+  "error": "Project shortname is ambiguous in this company. Use the project ID."
+}
+```

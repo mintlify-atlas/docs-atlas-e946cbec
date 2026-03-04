@@ -1,0 +1,469 @@
+---
+title: 'paperclipai onboard'
+description: 'Interactive first-run setup wizard for Paperclip'
+---
+
+## Overview
+
+The `onboard` command provides an interactive setup wizard that guides you through configuring your Paperclip instance for the first time. It configures database, LLM providers, logging, server settings, storage, and secrets management.
+
+## Syntax
+
+```bash
+paperclipai onboard [options]
+```
+
+## Options
+
+### `--config <path>`
+Path to config file to create or update.
+
+**Default:** `~/.paperclip/instances/default/config.json`
+
+```bash
+paperclipai onboard --config /etc/paperclip/config.json
+```
+
+### `--data-dir <path>`
+Paperclip data directory root. Isolates state from `~/.paperclip`.
+
+```bash
+paperclipai onboard --data-dir /custom/data
+```
+
+### `--yes` / `-y`
+Accept all defaults (quickstart mode). Skips all prompts and starts immediately.
+
+```bash
+paperclipai onboard -y
+```
+
+**Behavior:**
+- Uses Quickstart defaults
+- Skips setup mode selection
+- Automatically starts Paperclip after configuration
+
+### `--run`
+Start Paperclip immediately after saving config.
+
+```bash
+paperclipai onboard --run
+```
+
+## Setup Modes
+
+When running without `--yes`, you'll be prompted to choose a setup path:
+
+### Quickstart (Recommended)
+
+Automatically configures:
+- **Database:** Embedded PostgreSQL on port 54329
+- **Logging:** File-based logs in `~/.paperclip/instances/<id>/logs`
+- **Server:** Local trusted mode on `127.0.0.1:3100`
+- **Storage:** Local disk in `~/.paperclip/instances/<id>/data/storage`
+- **Secrets:** Local encrypted with auto-generated key
+- **LLM:** Not configured (can add later)
+
+### Advanced Setup
+
+Provides interactive prompts for each configuration section:
+
+1. **Database** - Choose between embedded PostgreSQL or managed Postgres
+2. **LLM Provider** - Configure Claude or OpenAI (optional)
+3. **Logging** - File-based or console logging
+4. **Server** - Deployment mode, exposure, host, and port
+5. **Storage** - Local disk or S3-compatible storage
+6. **Secrets** - Encryption settings and key management
+
+## Interactive Workflow
+
+### 1. Introduction
+
+```
+┌  paperclipai onboard
+│
+│  Local home: /home/user/.paperclip | instance: default | config: /home/user/.paperclip/instances/default/config.json
+│
+```
+
+### 2. Setup Mode Selection
+
+```
+◆  Choose setup path
+│  ○ Quickstart (Recommended: local defaults + ready to run)
+│  ● Advanced setup (Customize database, server, storage, and more)
+└
+```
+
+### 3. Configuration (Advanced mode)
+
+#### Database Configuration
+
+Prompts for database mode:
+- **embedded-postgres** - Built-in PostgreSQL (no external database needed)
+- **postgres** - Connect to external PostgreSQL instance
+
+If selecting postgres, you'll provide:
+- Connection string (e.g., `postgres://user:pass@host:5432/dbname`)
+- Connection is tested automatically
+
+#### LLM Provider Configuration
+
+Optional LLM configuration:
+- **Provider:** Claude or OpenAI
+- **API Key:** Your provider API key
+- **Validation:** Key is tested against provider API
+
+```
+◆  Configure LLM provider?
+│  ● Yes
+│  ○ No (skip)
+│
+◆  Select LLM provider
+│  ● claude
+│  ○ openai
+│
+◆  API key:
+│  sk-ant-***************************
+│
+✓  API key is valid
+```
+
+#### Logging Configuration
+
+Configure where logs are written:
+- **Mode:** `file` or `console`
+- **Log directory:** Path for file mode (default: `~/.paperclip/instances/default/logs`)
+
+#### Server Configuration
+
+Server and auth settings:
+
+**Deployment Mode:**
+- `local_trusted` - No authentication, local development
+- `authenticated` - Full authentication required
+
+**Exposure:**
+- `private` - Only allowed hostnames (authenticated mode)
+- `public` - Open access
+
+**Network:**
+- **Host:** IP address to bind (default: `127.0.0.1`)
+- **Port:** HTTP port (default: `3100`)
+
+**Additional:**
+- **Serve UI:** Whether to serve web UI from the server
+- **Allowed hostnames:** List of allowed client hostnames (authenticated/private only)
+
+#### Storage Configuration
+
+Configure where files are stored:
+
+**Providers:**
+- `local_disk` - Store files on local filesystem
+- `s3` - Use S3 or S3-compatible storage
+
+**Local disk options:**
+- **Base directory:** Path for file storage
+
+**S3 options:**
+- **Bucket:** S3 bucket name
+- **Region:** AWS region
+- **Endpoint:** Custom endpoint (for S3-compatible services)
+- **Prefix:** Optional object key prefix
+- **Force path style:** Enable for non-AWS S3 providers
+
+#### Secrets Configuration
+
+Secrets encryption settings (uses local encrypted provider by default):
+- **Provider:** `local_encrypted`
+- **Strict mode:** Require secret refs for sensitive environment keys
+- **Key file:** Path to master encryption key (auto-generated)
+
+### 4. Agent JWT Secret
+
+A JWT secret is automatically generated or reused:
+
+```
+✔  Created PAPERCLIP_AGENT_JWT_SECRET in /home/user/.paperclip/instances/default/.env.local
+```
+
+This secret is required for local adapter authentication.
+
+### 5. Secrets Key File
+
+If using local encrypted secrets, a master key is generated:
+
+```
+✔  Created local secrets key file at /home/user/.paperclip/instances/default/secrets/master.key
+```
+
+<Warning>
+**Keep this key secure!** It encrypts all secrets in your instance. Back it up safely.
+</Warning>
+
+### 6. Configuration Summary
+
+```
+┌  Configuration saved
+│
+│  Database: embedded-postgres
+│  LLM: claude
+│  Logging: file -> /home/user/.paperclip/instances/default/logs
+│  Server: local_trusted/private @ 127.0.0.1:3100
+│  Allowed hosts: (loopback only)
+│  Auth URL mode: auto
+│  Storage: local_disk
+│  Secrets: local_encrypted (strict mode off)
+│  Agent auth: PAPERCLIP_AGENT_JWT_SECRET configured
+│
+```
+
+### 7. Next Steps
+
+```
+┌  Next commands
+│
+│  Run: paperclipai run
+│  Reconfigure later: paperclipai configure
+│  Diagnose setup: paperclipai doctor
+│
+```
+
+### 8. Bootstrap CEO Invite (Authenticated mode only)
+
+If you selected `authenticated` deployment mode, a bootstrap invite is generated:
+
+```
+▲  Generating bootstrap CEO invite
+│
+✔  Created bootstrap CEO invite.
+│  Invite URL: http://localhost:3100/invite/pcp_bootstrap_***
+│  Expires: 2026-03-07T22:30:00.000Z
+```
+
+Use this URL to create the first admin user.
+
+### 9. Start Paperclip Prompt
+
+Unless running with `--yes` or `--run`, you'll be asked:
+
+```
+◆  Start Paperclip now?
+│  ● Yes
+│  ○ No
+│
+```
+
+Selecting "Yes" runs `paperclipai run` automatically.
+
+## Examples
+
+### Quickstart with defaults
+
+```bash
+# Interactive quickstart
+paperclipai onboard
+# Select "Quickstart" when prompted
+```
+
+### Fully automated setup
+
+```bash
+# Non-interactive, uses all defaults and starts immediately
+paperclipai onboard --yes
+```
+
+### Advanced configuration
+
+```bash
+# Interactive with full customization
+paperclipai onboard
+# Select "Advanced setup" when prompted
+```
+
+### Custom config location
+
+```bash
+paperclipai onboard --config /etc/paperclip/production.json
+```
+
+### Custom data directory
+
+```bash
+paperclipai onboard --data-dir /mnt/paperclip-data
+```
+
+### Onboard and start immediately
+
+```bash
+paperclipai onboard --run
+```
+
+## Configuration File
+
+The onboard command creates a `config.json` file with this structure:
+
+```json
+{
+  "$meta": {
+    "version": 1,
+    "updatedAt": "2026-03-04T22:30:00.000Z",
+    "source": "onboard"
+  },
+  "database": {
+    "mode": "embedded-postgres",
+    "embeddedPostgresDataDir": "/home/user/.paperclip/instances/default/db",
+    "embeddedPostgresPort": 54329
+  },
+  "logging": {
+    "mode": "file",
+    "logDir": "/home/user/.paperclip/instances/default/logs"
+  },
+  "server": {
+    "deploymentMode": "local_trusted",
+    "exposure": "private",
+    "host": "127.0.0.1",
+    "port": 3100,
+    "allowedHostnames": [],
+    "serveUi": true
+  },
+  "auth": {
+    "baseUrlMode": "auto"
+  },
+  "storage": {
+    "provider": "local_disk",
+    "localDisk": {
+      "baseDir": "/home/user/.paperclip/instances/default/data/storage"
+    }
+  },
+  "secrets": {
+    "provider": "local_encrypted",
+    "strictMode": false,
+    "localEncrypted": {
+      "keyFilePath": "/home/user/.paperclip/instances/default/secrets/master.key"
+    }
+  }
+}
+```
+
+## Updating Existing Configuration
+
+If a config file already exists, `onboard` will update it:
+
+```
+│  /home/user/.paperclip/instances/default/config.json exists, updating config
+```
+
+Your choices will merge with or replace existing settings.
+
+<Note>
+If the existing config is invalid, you'll see a warning but can proceed to fix it.
+</Note>
+
+## Validation
+
+### Database Connection Test
+
+When configuring external Postgres, the connection is tested:
+
+```
+◐  Testing database connection...
+✔  Database connection successful
+```
+
+Or if it fails:
+
+```
+⚠  Could not connect to database — you can fix this later with `paperclipai doctor`
+```
+
+### API Key Validation
+
+LLM provider API keys are validated:
+
+**Claude:**
+- Tests against `https://api.anthropic.com/v1/messages`
+- Validates with a minimal request
+
+**OpenAI:**
+- Tests against `https://api.openai.com/v1/models`
+- Validates authentication
+
+Results:
+
+```
+✔  API key is valid
+```
+
+Or:
+
+```
+⚠  API key appears invalid — you can update it later
+⚠  Could not reach API — continuing anyway
+```
+
+## Troubleshooting
+
+### Port already in use
+
+If the default port 3100 is occupied:
+
+1. Choose a different port during advanced setup
+2. Or change it later:
+   ```bash
+   paperclipai configure --section server
+   ```
+
+### Database connection fails
+
+For external Postgres:
+
+1. Verify connection string format:
+   ```
+   postgres://username:password@host:port/database
+   ```
+
+2. Check network access and credentials
+
+3. Run doctor to diagnose:
+   ```bash
+   paperclipai doctor
+   ```
+
+### Invalid API key
+
+If LLM API key validation fails:
+
+1. Double-check the key from your provider
+2. Update later using:
+   ```bash
+   paperclipai configure --section llm
+   ```
+
+### Permission denied
+
+If you can't write to default paths:
+
+1. Use a custom data directory:
+   ```bash
+   paperclipai onboard --data-dir ~/my-paperclip
+   ```
+
+2. Or run with appropriate permissions
+
+## Next Steps
+
+After onboarding:
+
+<CardGroup cols={2}>
+  <Card title="Run Paperclip" icon="play" href="/cli/run">
+    Start your configured instance
+  </Card>
+  <Card title="Verify setup" icon="stethoscope" href="/cli/doctor">
+    Run diagnostic checks
+  </Card>
+  <Card title="Update config" icon="gear" href="/cli/configure">
+    Modify configuration sections
+  </Card>
+</CardGroup>

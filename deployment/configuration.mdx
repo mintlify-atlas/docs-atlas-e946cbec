@@ -1,0 +1,493 @@
+---
+title: Configuration
+description: Configure Paperclip deployment, storage, secrets, and runtime options
+---
+
+Paperclip configuration is managed through a combination of config files and environment variables.
+
+## Configuration Methods
+
+### Interactive CLI
+
+Use the CLI for guided configuration:
+
+```bash
+# Full onboarding
+pnpm paperclipai onboard
+
+# Configure specific section
+pnpm paperclipai configure --section server
+pnpm paperclipai configure --section database
+pnpm paperclipai configure --section secrets
+pnpm paperclipai configure --section storage
+```
+
+### Config File
+
+Configuration is stored in:
+```
+~/.paperclip/instances/default/config.json
+```
+
+Override with:
+```bash
+PAPERCLIP_CONFIG=/custom/path/config.json
+```
+
+### Environment Variables
+
+Environment variables override config file settings. Useful for containerized deployments.
+
+## Deployment Configuration
+
+### Deployment Mode
+
+Two modes: `local_trusted` and `authenticated`
+
+**Environment:**
+```bash
+PAPERCLIP_DEPLOYMENT_MODE=authenticated
+```
+
+**Config file:**
+```json
+{
+  "server": {
+    "deploymentMode": "authenticated"
+  }
+}
+```
+
+### Exposure Policy
+
+For `authenticated` mode: `private` or `public`
+
+**Environment:**
+```bash
+PAPERCLIP_DEPLOYMENT_EXPOSURE=public
+```
+
+**Config file:**
+```json
+{
+  "server": {
+    "exposure": "public"
+  }
+}
+```
+
+### Server Host and Port
+
+**Environment:**
+```bash
+HOST=0.0.0.0
+PORT=3100
+```
+
+**Config file:**
+```json
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 3100
+  }
+}
+```
+
+### UI Serving
+
+Control whether the API server serves the UI:
+
+**Environment:**
+```bash
+SERVE_UI=true
+```
+
+**Config file:**
+```json
+{
+  "server": {
+    "serveUi": true
+  }
+}
+```
+
+## Database Configuration
+
+### Database Mode
+
+Two modes: `embedded-postgres` (default) or `postgres`
+
+**Config file:**
+```json
+{
+  "database": {
+    "mode": "postgres",
+    "connectionString": "postgres://user:pass@host:5432/paperclip"
+  }
+}
+```
+
+**Environment (overrides config):**
+```bash
+DATABASE_URL=postgres://user:pass@host:5432/paperclip
+```
+
+### Embedded PostgreSQL Settings
+
+**Config file:**
+```json
+{
+  "database": {
+    "mode": "embedded-postgres",
+    "embeddedPostgresDataDir": "~/.paperclip/instances/default/db",
+    "embeddedPostgresPort": 54329
+  }
+}
+```
+
+See [Database Setup](/deployment/database) for more details.
+
+## Secrets Configuration
+
+### Secrets Provider
+
+Available providers: `local_encrypted`
+
+**Environment:**
+```bash
+PAPERCLIP_SECRETS_PROVIDER=local_encrypted
+```
+
+**Config file:**
+```json
+{
+  "secrets": {
+    "provider": "local_encrypted",
+    "strictMode": true,
+    "localEncrypted": {
+      "keyFilePath": "~/.paperclip/instances/default/secrets/master.key"
+    }
+  }
+}
+```
+
+### Strict Mode
+
+Prevent inline secrets in environment variables:
+
+**Environment:**
+```bash
+PAPERCLIP_SECRETS_STRICT_MODE=true
+```
+
+**Config file:**
+```json
+{
+  "secrets": {
+    "strictMode": true
+  }
+}
+```
+
+In strict mode, sensitive keys (`*_API_KEY`, `*_TOKEN`, `*_SECRET`) must use secret references.
+
+### Master Key Configuration
+
+**Via environment (raw key):**
+```bash
+# 32-byte key as hex, base64, or 32-char string
+PAPERCLIP_SECRETS_MASTER_KEY=0123456789abcdef0123456789abcdef
+```
+
+**Via file path:**
+```bash
+PAPERCLIP_SECRETS_MASTER_KEY_FILE=/app/secrets/master.key
+```
+
+See [Security](/deployment/security) for key management best practices.
+
+## Storage Configuration
+
+### Storage Provider
+
+Available providers: `local_disk`, `s3`
+
+**Environment:**
+```bash
+PAPERCLIP_STORAGE_PROVIDER=s3
+```
+
+**Config file:**
+```json
+{
+  "storage": {
+    "provider": "s3"
+  }
+}
+```
+
+### Local Disk Storage
+
+**Environment:**
+```bash
+PAPERCLIP_STORAGE_PROVIDER=local_disk
+PAPERCLIP_STORAGE_LOCAL_DIR=~/.paperclip/instances/default/data/storage
+```
+
+**Config file:**
+```json
+{
+  "storage": {
+    "provider": "local_disk",
+    "localDisk": {
+      "baseDir": "~/.paperclip/instances/default/data/storage"
+    }
+  }
+}
+```
+
+### S3 Storage
+
+**Environment:**
+```bash
+PAPERCLIP_STORAGE_PROVIDER=s3
+PAPERCLIP_STORAGE_S3_BUCKET=paperclip-uploads
+PAPERCLIP_STORAGE_S3_REGION=us-east-1
+PAPERCLIP_STORAGE_S3_PREFIX=prod/
+PAPERCLIP_STORAGE_S3_ENDPOINT=https://minio.example.com
+PAPERCLIP_STORAGE_S3_FORCE_PATH_STYLE=true
+
+# AWS credentials
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+```
+
+**Config file:**
+```json
+{
+  "storage": {
+    "provider": "s3",
+    "s3": {
+      "bucket": "paperclip-uploads",
+      "region": "us-east-1",
+      "prefix": "prod/",
+      "endpoint": "https://minio.example.com",
+      "forcePathStyle": true
+    }
+  }
+}
+```
+
+## Authentication Configuration
+
+### Base URL Mode
+
+Two modes: `auto` or `explicit`
+
+**Environment:**
+```bash
+PAPERCLIP_AUTH_BASE_URL_MODE=explicit
+PAPERCLIP_AUTH_PUBLIC_BASE_URL=https://paperclip.example.com
+```
+
+**Config file:**
+```json
+{
+  "auth": {
+    "baseUrlMode": "explicit",
+    "publicBaseUrl": "https://paperclip.example.com"
+  }
+}
+```
+
+**Recommendations:**
+- `auto`: Private network deployments (Tailscale, VPN)
+- `explicit`: Internet-facing deployments
+
+### Allowed Hostnames
+
+For multi-domain access:
+
+**Environment:**
+```bash
+PAPERCLIP_ALLOWED_HOSTNAMES=paperclip.example.com,app.example.com
+```
+
+**Config file:**
+```json
+{
+  "server": {
+    "allowedHostnames": [
+      "paperclip.example.com",
+      "app.example.com"
+    ]
+  }
+}
+```
+
+**Add via CLI:**
+```bash
+pnpm paperclipai allowed-hostname my-macbook-pro
+```
+
+## Instance Configuration
+
+### Instance Home
+
+Base directory for all instance data:
+
+```bash
+PAPERCLIP_HOME=~/.paperclip
+```
+
+### Instance ID
+
+Run multiple isolated instances:
+
+```bash
+PAPERCLIP_INSTANCE_ID=default
+```
+
+Data is stored in `$PAPERCLIP_HOME/instances/$PAPERCLIP_INSTANCE_ID/`.
+
+### Instance Config Path
+
+Direct path to config file:
+
+```bash
+PAPERCLIP_CONFIG=/custom/path/config.json
+```
+
+## Runtime Features
+
+### Heartbeat Scheduler
+
+Controls scheduled agent heartbeats:
+
+**Environment:**
+```bash
+HEARTBEAT_SCHEDULER_ENABLED=true
+HEARTBEAT_SCHEDULER_INTERVAL_MS=30000
+```
+
+**Defaults:**
+- Enabled: `true`
+- Interval: 30 seconds (minimum 10 seconds)
+
+See `server/src/config.ts:186`.
+
+### Company Deletion
+
+Enable/disable company deletion:
+
+**Environment:**
+```bash
+PAPERCLIP_ENABLE_COMPANY_DELETION=false
+```
+
+**Defaults:**
+- `local_trusted`: enabled
+- `authenticated`: disabled
+
+See `server/src/config.ts:146`.
+
+## Configuration Priority
+
+Settings are resolved in this order (highest priority first):
+
+1. **Environment variables**
+2. **Config file** (`~/.paperclip/instances/default/config.json`)
+3. **Default values**
+
+## Full Configuration Reference
+
+See `server/src/config.ts:31` for the complete `Config` interface:
+
+```typescript
+interface Config {
+  deploymentMode: DeploymentMode;
+  deploymentExposure: DeploymentExposure;
+  host: string;
+  port: number;
+  allowedHostnames: string[];
+  authBaseUrlMode: AuthBaseUrlMode;
+  authPublicBaseUrl: string | undefined;
+  databaseMode: DatabaseMode;
+  databaseUrl: string | undefined;
+  embeddedPostgresDataDir: string;
+  embeddedPostgresPort: number;
+  serveUi: boolean;
+  secretsProvider: SecretProvider;
+  secretsStrictMode: boolean;
+  secretsMasterKeyFilePath: string;
+  storageProvider: StorageProvider;
+  storageLocalDiskBaseDir: string;
+  storageS3Bucket: string;
+  storageS3Region: string;
+  storageS3Endpoint: string | undefined;
+  storageS3Prefix: string;
+  storageS3ForcePathStyle: boolean;
+  heartbeatSchedulerEnabled: boolean;
+  heartbeatSchedulerIntervalMs: number;
+  companyDeletionEnabled: boolean;
+}
+```
+
+## Validation
+
+Validate configuration:
+
+```bash
+pnpm paperclipai doctor
+```
+
+Auto-repair issues:
+
+```bash
+pnpm paperclipai doctor --repair
+```
+
+## Examples
+
+### Local Development
+
+```bash
+# Minimal - uses all defaults
+pnpm dev
+```
+
+### Private Network (Tailscale)
+
+```bash
+PAPERCLIP_DEPLOYMENT_MODE=authenticated
+PAPERCLIP_DEPLOYMENT_EXPOSURE=private
+HOST=0.0.0.0
+PORT=3100
+```
+
+### Production (Internet-Facing)
+
+```bash
+PAPERCLIP_DEPLOYMENT_MODE=authenticated
+PAPERCLIP_DEPLOYMENT_EXPOSURE=public
+PAPERCLIP_AUTH_PUBLIC_BASE_URL=https://paperclip.example.com
+PAPERCLIP_SECRETS_STRICT_MODE=true
+PAPERCLIP_ENABLE_COMPANY_DELETION=false
+DATABASE_URL=postgres://...
+PAPERCLIP_STORAGE_PROVIDER=s3
+PAPERCLIP_STORAGE_S3_BUCKET=paperclip-uploads
+HOST=0.0.0.0
+PORT=3100
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Setup" icon="database" href="/deployment/database">
+    Configure PostgreSQL and run migrations
+  </Card>
+  <Card title="Security" icon="shield" href="/deployment/security">
+    Secure your deployment with best practices
+  </Card>
+</CardGroup>

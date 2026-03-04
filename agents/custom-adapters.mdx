@@ -1,0 +1,622 @@
+---
+title: "Custom Adapters"
+description: "Build your own adapter for custom agent runtimes and platforms"
+---
+
+## Overview
+
+Custom adapters allow you to integrate any agent runtime with Paperclip. Whether you're building a proprietary AI system, integrating with third-party platforms, or experimenting with novel execution models, the adapter interface provides full flexibility.
+
+<Info>
+  This guide covers building **server-side adapters**. For UI and CLI integration, see the full adapter development documentation.
+</Info>
+
+## Adapter Interface
+
+Every adapter implements the `ServerAdapterModule` interface:
+
+```typescript
+import type { ServerAdapterModule } from "@paperclipai/adapter-utils";
+
+export const myAdapter: ServerAdapterModule = {
+  type: "my_custom_adapter",
+  execute: async (ctx) => { /* ... */ },
+  testEnvironment: async (ctx) => { /* ... */ },
+  sessionCodec: { /* ... */ },
+  supportsLocalAgentJwt: true,
+  models: [
+    { id: "model-1", label: "Model 1" },
+    { id: "model-2", label: "Model 2" }
+  ],
+  agentConfigurationDoc: "# Configuration documentation"
+};
+```
+
+### Required Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | string | Unique adapter type identifier (e.g., `"my_adapter"`) |
+| `execute` | function | Execute agent invocation and return results |
+| `testEnvironment` | function | Test adapter configuration and environment |
+
+### Optional Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sessionCodec` | object | Session serialization/deserialization logic |
+| `supportsLocalAgentJwt` | boolean | Whether adapter supports local agent JWT auth |
+| `models` | array | List of available models for this adapter |
+| `listModels` | function | Async function to fetch available models |
+| `agentConfigurationDoc` | string | Markdown documentation for configuration |
+
+## The execute Function
+
+`execute` is the core of your adapter. It receives context and returns results:
+
+```typescript
+import type {
+  AdapterExecutionContext,
+  AdapterExecutionResult
+} from "@paperclipai/adapter-utils";
+
+async function execute(
+  ctx: AdapterExecutionContext
+): Promise<AdapterExecutionResult> {
+  const { runId, agent, runtime, config, context, onLog, onMeta, authToken } = ctx;
+
+  // 1. Extract configuration
+  const url = config.url as string;
+  const apiKey = config.apiKey as string;
+
+  // 2. Log invocation
+  await onLog("stdout", `[my-adapter] Invoking agent ${agent.id}\n`);
+
+  // 3. Execute agent
+  const result = await invokeMyAgent({
+    url,
+    apiKey,
+    agentId: agent.id,
+    taskId: context.taskId,
+  });
+
+  // 4. Return structured result
+  return {
+    exitCode: result.success ? 0 : 1,
+    signal: null,
+    timedOut: false,
+    errorMessage: result.error || null,
+    usage: {
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+    },
+    provider: "my-provider",
+    model: result.model,
+    costUsd: result.costUsd,
+    summary: result.summary,
+  };
+}
+```
+
+### Execution Context
+
+```typescript
+interface AdapterExecutionContext {
+  runId: string;                    // Unique run identifier
+  agent: AdapterAgent;              // Agent metadata
+  runtime: AdapterRuntime;          // Session state
+  config: Record<string, unknown>;  // Adapter configuration
+  context: Record<string, unknown>; // Wake context
+  onLog: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
+  onMeta?: (meta: AdapterInvocationMeta) => Promise<void>;
+  authToken?: string;               // Agent API key
+}
+```
+
+#### Agent Metadata
+
+```typescript
+interface AdapterAgent {
+  id: string;
+  companyId: string;
+  name: string;
+  adapterType: string | null;
+  adapterConfig: unknown;
+}
+```
+
+#### Runtime State
+
+```typescript
+interface AdapterRuntime {
+  sessionId: string | null;         // Legacy session ID
+  sessionParams: Record<string, unknown> | null;
+  sessionDisplayId: string | null;
+  taskKey: string | null;
+}
+```
+
+### Execution Result
+
+```typescript
+interface AdapterExecutionResult {
+  exitCode: number | null;          // 0 = success, non-zero = failure, null = timeout
+  signal: string | null;            // Process signal (e.g., "SIGTERM")
+  timedOut: boolean;                // Whether execution timed out
+  errorMessage?: string | null;     // Human-readable error
+  errorCode?: string | null;        // Machine-readable error code
+  errorMeta?: Record<string, unknown>; // Additional error context
+  usage?: UsageSummary;             // Token usage
+  sessionId?: string | null;        // Legacy session ID
+  sessionParams?: Record<string, unknown>; // Session state to persist
+  sessionDisplayId?: string | null; // UI-friendly session identifier
+  provider?: string | null;         // AI provider (e.g., "openai")
+  model?: string | null;            // Model used
+  billingType?: "api" | "subscription";
+  costUsd?: number | null;          // Execution cost
+  resultJson?: Record<string, unknown>; // Structured result data
+  summary?: string | null;          // Brief execution summary
+  clearSession?: boolean;           // Whether to clear saved session
+}
+```
+
+## Example: Simple HTTP Agent
+
+Here's a complete example of a custom HTTP-based adapter:
+
+```typescript
+import type {
+  AdapterExecutionContext,
+  AdapterExecutionResult,
+  ServerAdapterModule
+} from "@paperclipai/adapter-utils";
+
+export const myHttpAdapter: ServerAdapterModule = {
+  type: "my_http_agent",
+
+  async execute(ctx: AdapterExecutionContext): Promise<AdapterExecutionResult> {
+    const { runId, agent, config, context, onLog } = ctx;
+
+    const url = config.url as string;
+    const apiKey = config.apiKey as string;
+    const timeoutMs = (config.timeoutMs as number) || 30000;
+
+    if (!url) {
+      return {
+        exitCode: 1,
+        signal: null,
+        timedOut: false,
+        errorMessage: "Missing required field: url",
+        errorCode: "config_invalid",
+      };
+    }
+
+    await onLog("stdout", `[my-adapter] Invoking ${url}\n`);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          runId,
+          agentId: agent.id,
+          companyId: agent.companyId,
+          taskId: context.taskId,
+          wakeReason: context.wakeReason,
+        }),
+        signal: controller.signal,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        return {
+          exitCode: 1,
+          signal: null,
+          timedOut: false,
+          errorMessage: `HTTP ${response.status}: ${result.error || response.statusText}`,
+          errorCode: "http_error",
+          resultJson: result,
+        };
+      }
+
+      await onLog("stdout", `[my-adapter] Success: ${result.summary}\n`);
+
+      return {
+        exitCode: 0,
+        signal: null,
+        timedOut: false,
+        usage: {
+          inputTokens: result.usage?.inputTokens || 0,
+          outputTokens: result.usage?.outputTokens || 0,
+        },
+        provider: "my-provider",
+        model: result.model,
+        costUsd: result.costUsd,
+        summary: result.summary,
+        resultJson: result,
+      };
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        await onLog("stderr", `[my-adapter] Timed out after ${timeoutMs}ms\n`);
+        return {
+          exitCode: null,
+          signal: null,
+          timedOut: true,
+          errorMessage: `Timed out after ${timeoutMs}ms`,
+          errorCode: "timeout",
+        };
+      }
+
+      const message = err instanceof Error ? err.message : String(err);
+      await onLog("stderr", `[my-adapter] Error: ${message}\n`);
+      return {
+        exitCode: 1,
+        signal: null,
+        timedOut: false,
+        errorMessage: message,
+        errorCode: "request_failed",
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
+
+  async testEnvironment(ctx) {
+    const checks = [];
+
+    if (!ctx.config.url) {
+      checks.push({
+        code: "url_missing",
+        level: "error" as const,
+        message: "URL is required",
+      });
+    } else {
+      checks.push({
+        code: "url_configured",
+        level: "info" as const,
+        message: `URL configured: ${ctx.config.url}`,
+      });
+    }
+
+    if (!ctx.config.apiKey) {
+      checks.push({
+        code: "api_key_missing",
+        level: "warn" as const,
+        message: "API key not configured",
+        hint: "Set apiKey in adapter configuration",
+      });
+    }
+
+    return {
+      adapterType: "my_http_agent",
+      status: checks.some(c => c.level === "error") ? "fail" : "pass",
+      checks,
+      testedAt: new Date().toISOString(),
+    };
+  },
+
+  models: [
+    { id: "model-v1", label: "Model V1" },
+    { id: "model-v2", label: "Model V2" },
+  ],
+
+  agentConfigurationDoc: `# my_http_agent configuration
+
+Adapter: my_http_agent
+
+Core fields:
+- url (string, required): Agent endpoint URL
+- apiKey (string, optional): API key for authentication
+- timeoutMs (number, optional): Request timeout in milliseconds (default: 30000)
+`,
+};
+```
+
+## Session Management
+
+If your adapter supports stateful sessions, implement a `sessionCodec`:
+
+```typescript
+import type { AdapterSessionCodec } from "@paperclipai/adapter-utils";
+
+export const sessionCodec: AdapterSessionCodec = {
+  deserialize(raw: unknown): Record<string, unknown> | null {
+    if (typeof raw !== "object" || raw === null) return null;
+    const record = raw as Record<string, unknown>;
+    const sessionId = typeof record.sessionId === "string" ? record.sessionId : null;
+    if (!sessionId) return null;
+
+    return {
+      sessionId,
+      metadata: record.metadata || {},
+    };
+  },
+
+  serialize(params: Record<string, unknown> | null): Record<string, unknown> | null {
+    if (!params || !params.sessionId) return null;
+    return {
+      sessionId: params.sessionId,
+      metadata: params.metadata || {},
+    };
+  },
+
+  getDisplayId(params: Record<string, unknown> | null): string | null {
+    return params?.sessionId as string || null;
+  },
+};
+```
+
+### Using Sessions in execute
+
+```typescript
+async function execute(ctx: AdapterExecutionContext): Promise<AdapterExecutionResult> {
+  const { runtime, config } = ctx;
+
+  // Retrieve session from previous run
+  const sessionId = runtime.sessionParams?.sessionId as string || null;
+
+  // Execute with session
+  const result = await myAgentInvoke({
+    ...config,
+    sessionId,
+  });
+
+  // Return new session state
+  return {
+    exitCode: 0,
+    signal: null,
+    timedOut: false,
+    sessionId: result.newSessionId,
+    sessionParams: {
+      sessionId: result.newSessionId,
+      metadata: result.sessionMetadata,
+    },
+    sessionDisplayId: result.newSessionId,
+  };
+}
+```
+
+## Environment Testing
+
+`testEnvironment` validates adapter configuration before execution:
+
+```typescript
+import type {
+  AdapterEnvironmentTestContext,
+  AdapterEnvironmentTestResult,
+} from "@paperclipai/adapter-utils";
+
+async function testEnvironment(
+  ctx: AdapterEnvironmentTestContext
+): Promise<AdapterEnvironmentTestResult> {
+  const checks = [];
+
+  // Check required config
+  if (!ctx.config.url) {
+    checks.push({
+      code: "url_missing",
+      level: "error" as const,
+      message: "URL is required",
+      hint: "Set url in adapterConfig",
+    });
+  }
+
+  // Check connectivity
+  if (ctx.config.url) {
+    try {
+      const response = await fetch(ctx.config.url as string, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(5000),
+      });
+      checks.push({
+        code: "url_reachable",
+        level: "info" as const,
+        message: `URL is reachable (${response.status})`,
+      });
+    } catch (err) {
+      checks.push({
+        code: "url_unreachable",
+        level: "error" as const,
+        message: "URL is not reachable",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return {
+    adapterType: "my_adapter",
+    status: checks.some(c => c.level === "error") ? "fail" : "pass",
+    checks,
+    testedAt: new Date().toISOString(),
+  };
+}
+```
+
+## Registering Your Adapter
+
+Add your adapter to the server's adapter registry:
+
+```typescript
+// server/src/adapters/registry.ts
+import { myHttpAdapter } from "./my-http-adapter.js";
+
+export const ADAPTER_REGISTRY = {
+  claude_local: claudeLocalAdapter,
+  codex_local: codexLocalAdapter,
+  openclaw: openclawAdapter,
+  my_http_agent: myHttpAdapter,  // <-- Add your adapter
+};
+```
+
+## Utility Functions
+
+Use helper functions from `@paperclipai/adapter-utils/server-utils`:
+
+```typescript
+import {
+  asString,
+  asNumber,
+  asBoolean,
+  asStringArray,
+  parseObject,
+  parseJson,
+  buildPaperclipEnv,
+  redactEnvForLogs,
+  ensureAbsoluteDirectory,
+  ensureCommandResolvable,
+  ensurePathInEnv,
+  renderTemplate,
+  runChildProcess,
+} from "@paperclipai/adapter-utils/server-utils";
+
+// Extract typed config
+const url = asString(config.url, "");
+const timeout = asNumber(config.timeoutMs, 30000);
+const enabled = asBoolean(config.enabled, true);
+const args = asStringArray(config.args);
+const env = parseObject(config.env) as Record<string, string>;
+
+// Render templates
+const prompt = renderTemplate(
+  "You are {{agent.name}}. Task: {{context.taskId}}",
+  { agent, context }
+);
+
+// Run child processes
+const result = await runChildProcess(runId, "my-command", ["--arg"], {
+  cwd: "/workspace",
+  env: buildPaperclipEnv(agent),
+  stdin: prompt,
+  timeoutSec: 900,
+  graceSec: 15,
+  onLog,
+});
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Validate configuration early">
+    Check required fields and return clear errors:
+
+    ```typescript
+    if (!config.url) {
+      return {
+        exitCode: 1,
+        errorMessage: "Missing required field: url",
+        errorCode: "config_invalid",
+      };
+    }
+    ```
+  </Accordion>
+  <Accordion title="Use structured error codes">
+    Return machine-readable error codes for common failures:
+
+    ```typescript
+    return {
+      exitCode: 1,
+      errorMessage: "Authentication failed",
+      errorCode: "auth_failed",
+      errorMeta: { reason: "invalid_api_key" },
+    };
+    ```
+  </Accordion>
+  <Accordion title="Log execution progress">
+    Stream logs via `onLog` for real-time visibility:
+
+    ```typescript
+    await onLog("stdout", "[my-adapter] Starting execution\n");
+    await onLog("stderr", "[my-adapter] Warning: rate limit approaching\n");
+    ```
+  </Accordion>
+  <Accordion title="Report token usage accurately">
+    Always return usage data for cost tracking:
+
+    ```typescript
+    return {
+      usage: {
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        cachedInputTokens: result.cachedTokens,
+      },
+      costUsd: result.costUsd,
+    };
+    ```
+  </Accordion>
+  <Accordion title="Handle timeouts gracefully">
+    Use abort controllers and return timeout status:
+
+    ```typescript
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const result = await fetch(url, { signal: controller.signal });
+    } catch (err) {
+      if (err.name === "AbortError") {
+        return { exitCode: null, timedOut: true };
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Testing Your Adapter
+
+### Unit Tests
+
+```typescript
+import { describe, it, expect } from "vitest";
+import { myHttpAdapter } from "./my-http-adapter.js";
+
+describe("myHttpAdapter", () => {
+  it("should return error if url is missing", async () => {
+    const result = await myHttpAdapter.execute({
+      runId: "test-run",
+      agent: { id: "agent-1", companyId: "company-1", name: "Test", adapterType: "my_http_agent", adapterConfig: {} },
+      runtime: { sessionId: null, sessionParams: null, sessionDisplayId: null, taskKey: null },
+      config: {},
+      context: {},
+      onLog: async () => {},
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.errorCode).toBe("config_invalid");
+  });
+});
+```
+
+### Integration Tests
+
+Test against a real endpoint:
+
+```bash
+curl -X POST http://localhost:3100/api/agents/:agentId/heartbeat/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"wakeReason": "manual"}'
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Process Adapters" icon="terminal" href="/agents/process-adapter">
+    Learn from the built-in process adapter implementations
+  </Card>
+  <Card title="HTTP Adapters" icon="globe" href="/agents/http-adapter">
+    Understand HTTP-based adapter patterns
+  </Card>
+  <Card title="Adapter Utils Reference" icon="book" href="https://github.com/paperclipai/paperclip/tree/main/packages/adapter-utils">
+    Full API reference for adapter utilities
+  </Card>
+  <Card title="Contributing" icon="code-branch" href="https://github.com/paperclipai/paperclip/blob/main/CONTRIBUTING.md">
+    Contribute your adapter back to Paperclip
+  </Card>
+</CardGroup>

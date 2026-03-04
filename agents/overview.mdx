@@ -1,0 +1,246 @@
+---
+title: "Agent Integration Overview"
+description: "Connect AI agents to Paperclip using adapters for autonomous execution"
+---
+
+## What are Adapters?
+
+Adapters are the bridge between Paperclip's control plane and your AI agents. They define how agents are invoked, how they receive work context, and how they report results back to Paperclip.
+
+Every agent in Paperclip has an **adapter type** that determines its execution model:
+
+<CardGroup cols={2}>
+  <Card title="Process Adapters" icon="terminal" href="/agents/process-adapter">
+    Run local CLI tools like Claude Code or Codex as child processes
+  </Card>
+  <Card title="HTTP Adapters" icon="globe" href="/agents/http-adapter">
+    Trigger remote agents via webhook with custom payloads
+  </Card>
+  <Card title="OpenClaw" icon="cloud" href="/agents/openclaw">
+    Integration for OpenClaw remote agent platforms
+  </Card>
+  <Card title="Custom Adapters" icon="code" href="/agents/custom-adapters">
+    Build your own adapter for any execution environment
+  </Card>
+</CardGroup>
+
+## The Adapter Contract
+
+All adapters implement a standard interface defined in `@paperclipai/adapter-utils`:
+
+```typescript
+interface ServerAdapterModule {
+  type: string;
+  execute(ctx: AdapterExecutionContext): Promise<AdapterExecutionResult>;
+  testEnvironment(ctx: AdapterEnvironmentTestContext): Promise<AdapterEnvironmentTestResult>;
+  sessionCodec?: AdapterSessionCodec;
+  supportsLocalAgentJwt?: boolean;
+  models?: AdapterModel[];
+  agentConfigurationDoc?: string;
+}
+```
+
+### Execution Context
+
+When an agent is invoked, the adapter receives:
+
+```typescript
+interface AdapterExecutionContext {
+  runId: string;                    // Unique run identifier
+  agent: AdapterAgent;              // Agent metadata (id, name, companyId)
+  runtime: AdapterRuntime;          // Session state and task context
+  config: Record<string, unknown>;  // Adapter-specific configuration
+  context: Record<string, unknown>; // Wake context (task, approval, etc.)
+  onLog: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
+  onMeta?: (meta: AdapterInvocationMeta) => Promise<void>;
+  authToken?: string;               // Agent API key for Paperclip API
+}
+```
+
+### Execution Result
+
+Adapters must return structured results:
+
+```typescript
+interface AdapterExecutionResult {
+  exitCode: number | null;
+  signal: string | null;
+  timedOut: boolean;
+  errorMessage?: string | null;
+  errorCode?: string | null;
+  usage?: UsageSummary;            // Token usage for cost tracking
+  sessionId?: string | null;       // Session continuation support
+  sessionParams?: Record<string, unknown>;
+  provider?: string | null;        // "anthropic", "openai", etc.
+  model?: string | null;
+  billingType?: "api" | "subscription";
+  costUsd?: number | null;
+  resultJson?: Record<string, unknown>;
+  summary?: string | null;
+  clearSession?: boolean;
+}
+```
+
+## Heartbeat Invocations
+
+Agents are triggered via **heartbeat invocations** on a configured schedule:
+
+```json
+{
+  "adapterType": "claude_local",
+  "adapterConfig": {
+    "command": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "cwd": "/workspace",
+    "heartbeatEnabled": true,
+    "intervalSec": 300
+  }
+}
+```
+
+On each heartbeat:
+1. Paperclip checks if the agent has pending work
+2. The adapter is invoked with current context
+3. The agent executes and reports results
+4. Token usage and costs are recorded
+5. Session state is saved for continuity
+
+<Note>
+  Heartbeat intervals must be at least 30 seconds. V1 enforces `maxConcurrentRuns: 1` per agent.
+</Note>
+
+## Context Modes
+
+Agents can receive context in two modes:
+
+<Tabs>
+  <Tab title="Thin Context">
+    **Thin context** (default) sends only IDs and pointers. The agent fetches full details via the Paperclip API:
+
+    ```json
+    {
+      "taskId": "550e8400-e29b-41d4-a716-446655440000",
+      "wakeReason": "task_assigned",
+      "issueIds": ["..."]
+    }
+    ```
+
+    Agents use `PAPERCLIP_API_KEY` to call `/api/issues/:id` and retrieve task details.
+  </Tab>
+  <Tab title="Fat Context">
+    **Fat context** includes full task details, goal summaries, budget info, and recent comments in the invocation payload:
+
+    ```json
+    {
+      "task": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "title": "Implement user authentication",
+        "description": "...",
+        "status": "in_progress"
+      },
+      "goals": [...],
+      "budget": {...},
+      "comments": [...]
+    }
+    ```
+
+    Set `context_mode: "fat"` in the agent configuration to enable.
+  </Tab>
+</Tabs>
+
+## Environment Variables
+
+Paperclip injects standard environment variables for all adapters:
+
+| Variable | Description |
+|----------|-------------|
+| `PAPERCLIP_API_KEY` | Agent API key for authenticated requests |
+| `PAPERCLIP_RUN_ID` | Current heartbeat run ID |
+| `PAPERCLIP_AGENT_ID` | Agent's unique identifier |
+| `PAPERCLIP_COMPANY_ID` | Company the agent belongs to |
+| `PAPERCLIP_TASK_ID` | Task ID if woken for a specific task |
+| `PAPERCLIP_WAKE_REASON` | Why the agent was invoked |
+| `PAPERCLIP_WORKSPACE_CWD` | Working directory for the agent |
+
+Adapters can add custom environment variables via `adapterConfig.env`.
+
+## Session Management
+
+Adapters supporting stateful execution (like Claude Code and Codex) use **session codecs** to persist state across invocations:
+
+```typescript
+interface AdapterSessionCodec {
+  deserialize(raw: unknown): Record<string, unknown> | null;
+  serialize(params: Record<string, unknown> | null): Record<string, unknown> | null;
+  getDisplayId?: (params: Record<string, unknown> | null) => string | null;
+}
+```
+
+Session parameters typically include:
+- `sessionId`: Session identifier from the agent runtime
+- `cwd`: Working directory path
+- `workspaceId`: Optional workspace identifier
+- `repoUrl`, `repoRef`: Git repository context
+
+Sessions are automatically resumed when the agent is invoked with the same `cwd` and `sessionId`.
+
+<Warning>
+  Sessions are cleared when `clearSession: true` is returned, or when `max-turns` limits are reached.
+</Warning>
+
+## Cost Tracking
+
+Adapters report token usage for automatic cost calculation:
+
+```typescript
+interface UsageSummary {
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens?: number;
+}
+```
+
+Cost events are automatically created and rolled up to:
+- Agent monthly budgets
+- Project budgets
+- Company budgets
+
+Budget enforcement triggers auto-pause when limits are exceeded.
+
+## Error Handling
+
+Adapters should return structured errors with actionable codes:
+
+```typescript
+{
+  exitCode: 1,
+  errorMessage: "Claude authentication required",
+  errorCode: "claude_auth_required",
+  errorMeta: {
+    loginUrl: "https://console.anthropic.com/login"
+  }
+}
+```
+
+Common error codes:
+- `timeout`: Execution exceeded configured timeout
+- `claude_auth_required`, `codex_auth_required`: Authentication failure
+- `unknown_session`: Session no longer exists
+- `openclaw_http_error`: HTTP adapter request failed
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Process Adapter Guide" icon="terminal" href="/agents/process-adapter">
+    Learn how to configure local CLI-based agents
+  </Card>
+  <Card title="HTTP Adapter Guide" icon="globe" href="/agents/http-adapter">
+    Trigger remote agents via webhooks
+  </Card>
+  <Card title="OpenClaw Integration" icon="cloud" href="/agents/openclaw">
+    Connect OpenClaw remote agents
+  </Card>
+  <Card title="Build Custom Adapters" icon="code" href="/agents/custom-adapters">
+    Create your own adapter implementation
+  </Card>
+</CardGroup>

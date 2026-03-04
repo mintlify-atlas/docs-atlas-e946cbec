@@ -1,0 +1,631 @@
+---
+title: 'paperclipai doctor'
+description: 'Run diagnostic checks and repairs on your Paperclip setup'
+---
+
+## Overview
+
+The `doctor` command runs comprehensive diagnostic checks on your Paperclip installation. It validates configuration, tests connections, verifies file permissions, and can automatically repair common issues.
+
+## Syntax
+
+```bash
+paperclipai doctor [options]
+```
+
+## Options
+
+### `--config <path>`
+Path to config file to check.
+
+**Default:** `~/.paperclip/instances/default/config.json`
+
+```bash
+paperclipai doctor --config /etc/paperclip/config.json
+```
+
+### `--data-dir <path>`
+Paperclip data directory root.
+
+```bash
+paperclipai doctor --data-dir /custom/data
+```
+
+### `--repair`
+Attempt to repair issues automatically.
+
+```bash
+paperclipai doctor --repair
+```
+
+### `--fix`
+Alias for `--repair`.
+
+```bash
+paperclipai doctor --fix
+```
+
+### `--yes` / `-y`
+Skip repair confirmation prompts. Auto-confirm all repairs.
+
+```bash
+paperclipai doctor --repair --yes
+```
+
+## Health Checks
+
+Doctor runs these checks in order:
+
+### 1. Config File
+
+Validates configuration file exists and is readable.
+
+**Pass:**
+```
+✓ Config file: Valid config at /home/user/.paperclip/instances/default/config.json
+```
+
+**Fail:**
+```
+✗ Config file: Config file not found
+  Run paperclipai onboard to create initial configuration
+```
+
+**Can repair:** No (must run onboard)
+
+### 2. Deployment/Auth Mode
+
+Verifies deployment mode and auth configuration are consistent.
+
+**Valid combinations:**
+- `local_trusted` + any exposure
+- `authenticated` + `private` or `public`
+
+**Pass:**
+```
+✓ Deployment/auth mode: local_trusted mode (no authentication required)
+```
+
+**Warn:**
+```
+! Deployment/auth mode: authenticated mode with public exposure — ensure proper security
+  Consider private exposure with allowedHostnames in production
+```
+
+**Can repair:** No (configuration choice)
+
+### 3. Agent JWT Secret
+
+Checks for `PAPERCLIP_AGENT_JWT_SECRET` in environment or `.env.local` file.
+
+**Pass:**
+```
+✓ Agent JWT secret: PAPERCLIP_AGENT_JWT_SECRET configured
+```
+
+**Fail:**
+```
+✗ Agent JWT secret: PAPERCLIP_AGENT_JWT_SECRET not found
+  Generate with: paperclipai onboard or set manually
+```
+
+**Can repair:** Yes - Generates new secret and writes to `.env.local`
+
+### 4. Secrets Adapter
+
+Validates secrets configuration and key file.
+
+**Pass:**
+```
+✓ Secrets adapter: Local encrypted secrets configured
+```
+
+**Fail:**
+```
+✗ Secrets adapter: Secrets key file missing at /home/user/.paperclip/instances/default/secrets/master.key
+  Will be created on first run
+```
+
+**Can repair:** Yes - Creates key file and directory
+
+### 5. Storage Adapter
+
+Verifies storage configuration and paths.
+
+**Pass (local_disk):**
+```
+✓ Storage adapter: Local disk storage configured at /home/user/.paperclip/instances/default/data/storage
+```
+
+**Pass (s3):**
+```
+✓ Storage adapter: S3 storage configured (bucket: my-bucket, region: us-east-1)
+```
+
+**Fail:**
+```
+✗ Storage adapter: Storage directory does not exist
+  Directory will be created: /home/user/.paperclip/instances/default/data/storage
+```
+
+**Can repair:** Yes - Creates storage directory
+
+### 6. Database
+
+Tests database connectivity and configuration.
+
+**Pass (embedded-postgres):**
+```
+✓ Database: Embedded Postgres will start on port 54329
+```
+
+**Pass (postgres):**
+```
+✓ Database: Connected to postgres://***@host:5432/paperclip
+```
+
+**Fail:**
+```
+✗ Database: Connection failed - ECONNREFUSED
+  Check connection string and database availability
+```
+
+**Can repair:** Yes - Can create database directory for embedded mode
+
+### 7. LLM Provider
+
+Validates LLM configuration if present.
+
+**Pass:**
+```
+✓ LLM provider: Claude configured (API key present)
+```
+
+**Warn:**
+```
+! LLM provider: Not configured (agents will fail without LLM access)
+  Configure with: paperclipai configure --section llm
+```
+
+**Fail:**
+```
+✗ LLM provider: API key configured but invalid
+  Update key with: paperclipai configure --section llm
+```
+
+**Can repair:** No (requires valid API key)
+
+### 8. Log Directory
+
+Verifies log directory exists and is writable.
+
+**Pass:**
+```
+✓ Log directory: /home/user/.paperclip/instances/default/logs
+```
+
+**Fail:**
+```
+✗ Log directory: Directory missing or not writable
+  Will create: /home/user/.paperclip/instances/default/logs
+```
+
+**Can repair:** Yes - Creates log directory
+
+### 9. Server Port
+
+Checks if configured port is available.
+
+**Pass:**
+```
+✓ Server port: Port 3100 is available
+```
+
+**Warn:**
+```
+! Server port: Port 3100 is in use
+  Change port with: paperclipai configure --section server
+```
+
+**Can repair:** No (requires manual port change)
+
+## Output Format
+
+### Status Icons
+
+- **✓** (green) - Check passed
+- **!** (yellow) - Warning (non-blocking)
+- **✗** (red) - Check failed (may block startup)
+
+### Check Result
+
+Each check shows:
+
+```
+<icon> <check name>: <status message>
+  <repair hint if applicable>
+```
+
+### Summary
+
+At the end:
+
+```
+┌  Summary
+│  8 passed, 1 warnings, 0 failed
+│
+└  All critical checks passed with some warnings.
+```
+
+**Outcomes:**
+
+- **All passed:** `All checks passed!` (green)
+- **Warnings only:** `All critical checks passed with some warnings.` (yellow)
+- **Failures:** `Some checks failed. Fix the issues above and re-run doctor.` (red)
+
+## Auto-Repair
+
+### Interactive Repair
+
+With `--repair` (no `--yes`):
+
+```bash
+paperclipai doctor --repair
+```
+
+You'll be prompted for each repairable issue:
+
+```
+✗ Agent JWT secret: PAPERCLIP_AGENT_JWT_SECRET not found
+  Generate with: paperclipai onboard or set manually
+│
+◆  Repair "Agent JWT secret"?
+│  ● Yes
+│  ○ No
+│
+✔  Repaired: Agent JWT secret
+```
+
+### Non-Interactive Repair
+
+With `--repair --yes`:
+
+```bash
+paperclipai doctor --repair --yes
+```
+
+All repairs are applied automatically without prompts:
+
+```
+✗ Agent JWT secret: PAPERCLIP_AGENT_JWT_SECRET not found
+✔  Repaired: Agent JWT secret
+✗ Log directory: Directory missing
+✔  Repaired: Log directory
+```
+
+### Repair Actions
+
+Doctor can automatically:
+
+1. **Generate JWT secret** - Creates new secret in `.env.local`
+2. **Create secrets key** - Generates master encryption key
+3. **Create directories** - Makes missing log, storage, or database directories
+4. **Fix permissions** - Ensures directories are writable (if possible)
+
+## Examples
+
+### Basic health check
+
+```bash
+paperclipai doctor
+```
+
+Runs all checks, reports issues, no repairs.
+
+### Check and repair
+
+```bash
+paperclipai doctor --repair
+```
+
+Prompts before each repair action.
+
+### Fully automated repair
+
+```bash
+paperclipai doctor --repair --yes
+```
+
+Fixes everything automatically, no prompts.
+
+### Check specific config
+
+```bash
+paperclipai doctor --config /etc/paperclip/prod.json
+```
+
+Checks production configuration.
+
+### Pre-deployment check
+
+```bash
+# Non-interactive, fail if issues found
+paperclipai doctor --repair --yes
+if [ $? -ne 0 ]; then
+  echo "Health check failed"
+  exit 1
+fi
+```
+
+## Exit Codes
+
+Doctor returns:
+
+- **0** - All checks passed (or only warnings)
+- **1** - One or more checks failed
+
+## Integration with Other Commands
+
+### Used by `run`
+
+The `run` command automatically calls doctor:
+
+```bash
+paperclipai run
+# Internally runs: paperclipai doctor --repair --yes
+```
+
+### After `onboard`
+
+Recommended to verify setup:
+
+```bash
+paperclipai onboard
+paperclipai doctor
+```
+
+### Before `configure`
+
+Check current state:
+
+```bash
+paperclipai doctor
+paperclipai configure --section database
+paperclipai doctor  # Verify changes
+```
+
+## Troubleshooting
+
+### All checks fail with "Config file not found"
+
+**Solution:** Run onboard first:
+
+```bash
+paperclipai onboard
+paperclipai doctor
+```
+
+### Database check fails
+
+**For embedded-postgres:**
+
+```bash
+# Ensure data directory exists
+paperclipai doctor --repair --yes
+
+# Or manually create
+mkdir -p ~/.paperclip/instances/default/db
+```
+
+**For external postgres:**
+
+```bash
+# Test connection manually
+psql "$(paperclipai env | grep DATABASE_URL | cut -d= -f2-)"
+
+# Update if needed
+paperclipai configure --section database
+```
+
+### Port check warns "in use"
+
+**Find what's using the port:**
+
+```bash
+lsof -i :3100
+```
+
+**Kill the process:**
+
+```bash
+kill <PID>
+```
+
+**Or change port:**
+
+```bash
+paperclipai configure --section server
+```
+
+### LLM provider check fails
+
+**Update API key:**
+
+```bash
+paperclipai configure --section llm
+```
+
+**Test manually:**
+
+```bash
+# For Claude
+curl -X POST https://api.anthropic.com/v1/messages \
+  -H "x-api-key: YOUR_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" \
+  -d '{"model":"claude-sonnet-4-5-20250929","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}'
+
+# For OpenAI
+curl https://api.openai.com/v1/models \
+  -H "Authorization: Bearer YOUR_KEY"
+```
+
+### Secrets key file check fails
+
+**Auto-create:**
+
+```bash
+paperclipai doctor --repair --yes
+```
+
+**Manual creation:**
+
+```bash
+mkdir -p ~/.paperclip/instances/default/secrets
+openssl rand -hex 32 > ~/.paperclip/instances/default/secrets/master.key
+chmod 600 ~/.paperclip/instances/default/secrets/master.key
+```
+
+### Storage directory check fails
+
+**Auto-create:**
+
+```bash
+paperclipai doctor --repair --yes
+```
+
+**Manual creation:**
+
+```bash
+mkdir -p ~/.paperclip/instances/default/data/storage
+```
+
+### Permission errors during repair
+
+**Run with proper permissions:**
+
+```bash
+sudo paperclipai doctor --repair --yes
+```
+
+**Or fix ownership:**
+
+```bash
+sudo chown -R $USER:$USER ~/.paperclip
+paperclipai doctor --repair --yes
+```
+
+## CI/CD Integration
+
+### Pre-deployment Health Check
+
+```bash
+#!/bin/bash
+set -e
+
+# Ensure config exists
+if [ ! -f /etc/paperclip/config.json ]; then
+  echo "Config file missing"
+  exit 1
+fi
+
+# Run health checks with auto-repair
+paperclipai doctor --config /etc/paperclip/config.json --repair --yes
+
+if [ $? -ne 0 ]; then
+  echo "Health checks failed"
+  exit 1
+fi
+
+echo "Health checks passed"
+```
+
+### GitHub Actions
+
+```yaml
+name: Health Check
+on: [push]
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      - run: npm install -g paperclipai
+      - run: paperclipai doctor --config ./config.json --repair --yes
+```
+
+### Docker Health Check
+
+```dockerfile
+FROM node:20-alpine
+RUN npm install -g paperclipai
+
+COPY config.json /app/config.json
+WORKDIR /app
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD paperclipai doctor --config /app/config.json || exit 1
+
+CMD ["paperclipai", "run", "--config", "/app/config.json"]
+```
+
+## Best Practices
+
+### Regular Health Checks
+
+Run doctor periodically:
+
+```bash
+# Daily cron job
+0 2 * * * /usr/bin/paperclipai doctor --config /etc/paperclip/config.json >> /var/log/paperclip-health.log 2>&1
+```
+
+### After Configuration Changes
+
+Always verify after changes:
+
+```bash
+paperclipai configure --section database
+paperclipai doctor --repair
+paperclipai run
+```
+
+### Before Production Deploy
+
+Validate staging environment:
+
+```bash
+paperclipai doctor --config staging.json --repair --yes
+# Review output
+# If passed, deploy to production
+```
+
+### Monitor Exit Code
+
+In scripts:
+
+```bash
+if paperclipai doctor --repair --yes; then
+  paperclipai run
+else
+  echo "Fix issues before starting"
+  exit 1
+fi
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Fix configuration" icon="gear" href="/cli/configure">
+    Update configuration sections
+  </Card>
+  <Card title="Start server" icon="play" href="/cli/run">
+    Run Paperclip after repairs
+  </Card>
+  <Card title="Re-run setup" icon="wand-magic-sparkles" href="/cli/onboard">
+    Go through onboarding again
+  </Card>
+</CardGroup>

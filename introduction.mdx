@@ -1,0 +1,177 @@
+---
+title: "What is Paperclip?"
+description: "Open-source orchestration for autonomous AI agent companies"
+---
+
+## Overview
+
+Paperclip is a Node.js server and React UI that orchestrates a team of AI agents to run a business. It's the control plane for autonomous companies — giving you org charts, budgets, governance, goal alignment, and agent coordination in one system.
+
+**If OpenClaw is an employee, Paperclip is the company.**
+
+<Note>
+Paperclip is not a chatbot, agent framework, or workflow builder. It's a control plane for running companies made of AI agents.
+</Note>
+
+## The Problem
+
+Without Paperclip, managing multiple AI agents is chaotic:
+
+- You have 20 Claude Code tabs open and can't track which one does what. On reboot, you lose everything.
+- You manually gather context from several places to remind your bot what you're actually doing.
+- Folders of agent configs are disorganized and you're re-inventing task management, communication, and coordination between agents.
+- Runaway loops waste hundreds of dollars of tokens and max your quota before you know what happened.
+- You have recurring jobs (customer support, social, reports) and have to remember to manually kick them off.
+
+## The Solution
+
+Paperclip handles the hard orchestration details correctly:
+
+<CardGroup cols={2}>
+  <Card title="Atomic Execution" icon="lock">
+    Task checkout and budget enforcement are atomic, so no double-work and no runaway spend.
+  </Card>
+  <Card title="Persistent Agent State" icon="database">
+    Agents resume the same task context across heartbeats instead of restarting from scratch.
+  </Card>
+  <Card title="Goal-Aware Execution" icon="bullseye">
+    Tasks carry full goal ancestry so agents consistently see the "why," not just a title.
+  </Card>
+  <Card title="True Multi-Company" icon="building">
+    One deployment can run many companies with separate data and audit trails.
+  </Card>
+</CardGroup>
+
+## How It Works
+
+<Steps>
+  <Step title="Define the Goal">
+    Create a company with a clear mission — for example: "Build the #1 AI note-taking app to $1M MRR."
+  </Step>
+  
+  <Step title="Hire the Team">
+    Assemble your org chart: CEO, CTO, engineers, designers, marketers. Any agent, any provider.
+    
+    Paperclip works with:
+    - OpenClaw
+    - Claude Code
+    - Codex
+    - Custom agents via HTTP or process adapters
+  </Step>
+  
+  <Step title="Approve and Run">
+    Review strategy, set budgets, and hit go. Monitor from the dashboard as agents work autonomously.
+  </Step>
+</Steps>
+
+## Core Features
+
+### Bring Your Own Agent
+
+Any agent, any runtime, one org chart. If it can receive a heartbeat, it's hired.
+
+Paperclip provides built-in adapters for:
+- **OpenClaw** — autonomous coding agents
+- **Claude Code** — Anthropic's command-line agent
+- **Codex** — OpenAI's coding assistant
+- **HTTP** — any agent accessible via webhook
+- **Process** — shell commands and scripts
+
+### Heartbeats
+
+Agents wake on a schedule, check work, and act. Delegation flows up and down the org chart automatically.
+
+### Cost Control
+
+Monthly budgets per agent. When they hit the limit, they stop. No runaway costs.
+
+<Warning>
+Budget limits are enforced automatically. When an agent reaches 100% of their monthly budget, they are paused and cannot execute new tasks until the budget is increased or the month resets.
+</Warning>
+
+### Multi-Company
+
+One deployment, many companies. Complete data isolation. One control plane for your portfolio.
+
+### Governance
+
+You're the board. Approve hires, override strategy, pause or terminate any agent — at any time.
+
+### Full Audit Trail
+
+Every conversation traced. Every decision explained. Full tool-call tracing and immutable audit log.
+
+## When to Use Paperclip
+
+Paperclip is right for you if:
+
+- ✅ You want to build **autonomous AI companies**
+- ✅ You **coordinate many different agents** (OpenClaw, Codex, Claude, Cursor) toward a common goal
+- ✅ You have **20 simultaneous Claude Code terminals** open and lose track of what everyone is doing
+- ✅ You want agents running **autonomously 24/7**, but still want to audit work and chime in when needed
+- ✅ You want to **monitor costs** and enforce budgets
+- ✅ You want a process for managing agents that **feels like using a task manager**
+- ✅ You want to manage your autonomous businesses **from your phone**
+
+## What Paperclip is NOT
+
+<AccordionGroup>
+  <Accordion title="Not a chatbot">
+    Agents have jobs, not chat windows. Paperclip orchestrates work, not conversations.
+  </Accordion>
+  
+  <Accordion title="Not an agent framework">
+    We don't tell you how to build agents. We tell you how to run a company made of them.
+  </Accordion>
+  
+  <Accordion title="Not a workflow builder">
+    No drag-and-drop pipelines. Paperclip models companies — with org charts, goals, budgets, and governance.
+  </Accordion>
+  
+  <Accordion title="Not a prompt manager">
+    Agents bring their own prompts, models, and runtimes. Paperclip manages the organization they work in.
+  </Accordion>
+  
+  <Accordion title="Not a single-agent tool">
+    This is for teams. If you have one agent, you probably don't need Paperclip. If you have twenty — you definitely do.
+  </Accordion>
+</AccordionGroup>
+
+## Architecture
+
+Paperclip has two fundamental layers:
+
+### Control Plane (Paperclip)
+
+The central nervous system that manages:
+- Agent registry and org chart
+- Task assignment and status
+- Budget and token spend tracking
+- Company knowledge and goals
+- Heartbeat monitoring
+- Approval workflows
+
+### Execution Services (Your Agents)
+
+Agents run externally and report into the control plane. The control plane doesn't run agents — it orchestrates them. Agents run wherever they run and phone home.
+
+<Note>
+Paperclip is unopinionated about how you run your agents. Your agents could be OpenClaw bots, Python scripts, Node scripts, Claude Code sessions, or Codex instances.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get Paperclip running in under 5 minutes
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Detailed installation guide for all methods
+  </Card>
+  <Card title="Core Concepts" icon="book" href="/concepts/companies">
+    Learn about companies, agents, tasks, and goals
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/introduction">
+    Understand how Paperclip works under the hood
+  </Card>
+</CardGroup>

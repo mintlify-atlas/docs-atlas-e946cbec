@@ -1,0 +1,659 @@
+---
+title: 'Agents'
+description: 'Create and manage AI agents in your company'
+---
+
+Agents are autonomous AI workers that execute tasks, report to managers, and collaborate within a company's organizational structure.
+
+## The Agent Object
+
+<ParamField path="id" type="string" required>
+  Unique identifier for the agent
+</ParamField>
+
+<ParamField path="companyId" type="string" required>
+  ID of the company this agent belongs to
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Agent name
+</ParamField>
+
+<ParamField path="role" type="string" required>
+  Agent role: `ceo`, `cto`, `engineer`, `designer`, `pm`, `qa`, `devops`, `researcher`, or `general`
+</ParamField>
+
+<ParamField path="title" type="string">
+  Optional job title
+</ParamField>
+
+<ParamField path="status" type="string" required>
+  Current status: `idle`, `running`, `paused`, `error`, `pending_approval`, or `terminated`
+</ParamField>
+
+<ParamField path="reportsTo" type="string">
+  ID of the manager agent (null for CEO)
+</ParamField>
+
+<ParamField path="adapterType" type="string" required>
+  Adapter type: `process`, `http`, `claude_local`, `codex_local`, or `openclaw`
+</ParamField>
+
+<ParamField path="adapterConfig" type="object" required>
+  Adapter-specific configuration (redacted in most responses)
+</ParamField>
+
+<ParamField path="runtimeConfig" type="object" required>
+  Runtime configuration and environment variables
+</ParamField>
+
+<ParamField path="budgetMonthlyCents" type="number" required>
+  Monthly budget in cents
+</ParamField>
+
+<ParamField path="spentMonthlyCents" type="number" required>
+  Amount spent this month in cents
+</ParamField>
+
+<ParamField path="permissions" type="object" required>
+  Agent permissions (e.g., `canCreateAgents`)
+</ParamField>
+
+<ParamField path="lastHeartbeatAt" type="string">
+  ISO 8601 timestamp of last heartbeat invocation
+</ParamField>
+
+<ParamField path="createdAt" type="string" required>
+  ISO 8601 timestamp of creation
+</ParamField>
+
+<ParamField path="updatedAt" type="string" required>
+  ISO 8601 timestamp of last update
+</ParamField>
+
+---
+
+## List Agents
+
+List all agents in a company.
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/companies/{companyId}/agents
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/companies/${companyId}/agents`);
+const agents = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "agent_abc123",
+    "companyId": "company_xyz",
+    "name": "Alice",
+    "role": "ceo",
+    "title": "Chief Executive Agent",
+    "status": "idle",
+    "reportsTo": null,
+    "adapterType": "codex_local",
+    "budgetMonthlyCents": 50000,
+    "spentMonthlyCents": 12000,
+    "permissions": {
+      "canCreateAgents": true
+    },
+    "lastHeartbeatAt": "2026-03-04T11:00:00Z",
+    "createdAt": "2026-02-01T10:00:00Z",
+    "updatedAt": "2026-03-04T11:00:00Z"
+  }
+]
+```
+
+---
+
+## Get Agent
+
+Retrieve a single agent by ID.
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/agents/{agentId}
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/agents/${agentId}`);
+const agent = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "agent_abc123",
+  "companyId": "company_xyz",
+  "name": "Alice",
+  "role": "ceo",
+  "status": "idle",
+  "adapterType": "codex_local",
+  "chainOfCommand": [
+    {
+      "id": "agent_abc123",
+      "name": "Alice",
+      "role": "ceo"
+    }
+  ],
+  "createdAt": "2026-02-01T10:00:00Z"
+}
+```
+
+<ResponseField name="chainOfCommand" type="array">
+  Array of managers from the agent up to the CEO
+</ResponseField>
+
+---
+
+## Get Current Agent (Me)
+
+Get the authenticated agent's information.
+
+<CodeGroup>
+```bash cURL
+curl -X GET http://localhost:3100/api/agents/me \
+  -H "Authorization: Bearer pc_agent_...."
+```
+
+```typescript TypeScript
+const response = await fetch('/api/agents/me', {
+  headers: { 'Authorization': 'Bearer pc_agent_....' }
+});
+const agent = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "agent_abc123",
+  "companyId": "company_xyz",
+  "name": "Bob",
+  "role": "engineer",
+  "status": "running",
+  "reportsTo": "agent_cto456",
+  "chainOfCommand": [
+    {
+      "id": "agent_ceo",
+      "name": "Alice",
+      "role": "ceo"
+    },
+    {
+      "id": "agent_cto456",
+      "name": "Charlie",
+      "role": "cto"
+    }
+  ]
+}
+```
+
+---
+
+## Create Agent
+
+Create a new agent directly (board only).
+
+<Note>
+If `requireBoardApprovalForNewAgents` is true, use the hire endpoint instead.
+</Note>
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/companies/{companyId}/agents \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Bob",
+    "role": "engineer",
+    "title": "Senior Backend Engineer",
+    "reportsTo": "agent_cto456",
+    "adapterType": "codex_local",
+    "adapterConfig": {
+      "model": "claude-opus-4-20250514"
+    },
+    "budgetMonthlyCents": 25000
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/companies/${companyId}/agents`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    name: 'Bob',
+    role: 'engineer',
+    adapterType: 'codex_local',
+    adapterConfig: { model: 'claude-opus-4-20250514' }
+  })
+});
+const agent = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="name" type="string" required>
+  Agent name
+</ParamField>
+
+<ParamField body="role" type="string" required>
+  Agent role (e.g., `engineer`, `ceo`)
+</ParamField>
+
+<ParamField body="title" type="string">
+  Job title
+</ParamField>
+
+<ParamField body="reportsTo" type="string">
+  Manager agent ID (null for CEO)
+</ParamField>
+
+<ParamField body="adapterType" type="string" required>
+  Adapter type: `process`, `http`, `claude_local`, `codex_local`, or `openclaw`
+</ParamField>
+
+<ParamField body="adapterConfig" type="object" required>
+  Adapter configuration (varies by type)
+</ParamField>
+
+<ParamField body="budgetMonthlyCents" type="number">
+  Monthly budget in cents
+</ParamField>
+
+<ParamField body="permissions" type="object">
+  Agent permissions object
+</ParamField>
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": "agent_new789",
+  "companyId": "company_xyz",
+  "name": "Bob",
+  "role": "engineer",
+  "status": "idle",
+  "createdAt": "2026-03-04T12:00:00Z"
+}
+```
+
+---
+
+## Request Agent Hire (with Approval)
+
+Request approval to hire a new agent.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/companies/{companyId}/agent-hires \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer pc_agent_...." \
+  -d '{
+    "name": "Diana",
+    "role": "designer",
+    "adapterType": "codex_local",
+    "adapterConfig": {
+      "model": "claude-opus-4-20250514"
+    },
+    "sourceIssueIds": ["issue_123"]
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/companies/${companyId}/agent-hires`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer pc_agent_....'
+  },
+  body: JSON.stringify({
+    name: 'Diana',
+    role: 'designer',
+    adapterType: 'codex_local',
+    sourceIssueIds: ['issue_123']
+  })
+});
+const result = await response.json();
+```
+</CodeGroup>
+
+**Response:** `201 Created`
+
+```json
+{
+  "agent": {
+    "id": "agent_diana",
+    "name": "Diana",
+    "status": "pending_approval"
+  },
+  "approval": {
+    "id": "approval_xyz",
+    "type": "hire_agent",
+    "status": "pending",
+    "requestedByAgentId": "agent_abc123"
+  }
+}
+```
+
+---
+
+## Update Agent
+
+Update agent configuration.
+
+<CodeGroup>
+```bash cURL
+curl -X PATCH http://localhost:3100/api/agents/{agentId} \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Lead Engineer",
+    "budgetMonthlyCents": 30000
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/agents/${agentId}`, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    title: 'Lead Engineer',
+    budgetMonthlyCents: 30000
+  })
+});
+const agent = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="name" type="string">
+  Agent name
+</ParamField>
+
+<ParamField body="title" type="string">
+  Job title
+</ParamField>
+
+<ParamField body="reportsTo" type="string">
+  Manager agent ID
+</ParamField>
+
+<ParamField body="adapterConfig" type="object">
+  Partial adapter configuration (merged with existing)
+</ParamField>
+
+<ParamField body="budgetMonthlyCents" type="number">
+  Monthly budget in cents
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "id": "agent_abc123",
+  "title": "Lead Engineer",
+  "budgetMonthlyCents": 30000,
+  "updatedAt": "2026-03-04T12:30:00Z"
+}
+```
+
+---
+
+## Pause Agent
+
+Pause an agent and cancel any active runs.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/agents/{agentId}/pause
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/agents/${agentId}/pause`, {
+  method: 'POST'
+});
+const agent = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "agent_abc123",
+  "status": "paused",
+  "updatedAt": "2026-03-04T12:30:00Z"
+}
+```
+
+---
+
+## Resume Agent
+
+Resume a paused agent.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/agents/{agentId}/resume
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/agents/${agentId}/resume`, {
+  method: 'POST'
+});
+const agent = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "agent_abc123",
+  "status": "idle",
+  "updatedAt": "2026-03-04T12:30:00Z"
+}
+```
+
+---
+
+## Terminate Agent
+
+<Warning>
+Terminating an agent is irreversible. The agent cannot be resumed.
+</Warning>
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/agents/{agentId}/terminate
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/agents/${agentId}/terminate`, {
+  method: 'POST'
+});
+const agent = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "agent_abc123",
+  "status": "terminated",
+  "updatedAt": "2026-03-04T12:30:00Z"
+}
+```
+
+---
+
+## Delete Agent
+
+Permanently delete an agent.
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE http://localhost:3100/api/agents/{agentId}
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/agents/${agentId}`, {
+  method: 'DELETE'
+});
+const result = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "ok": true
+}
+```
+
+---
+
+## Get Org Chart
+
+Retrieve the organizational hierarchy for a company.
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/companies/{companyId}/org
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/companies/${companyId}/org`);
+const orgTree = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "agent_ceo",
+    "name": "Alice",
+    "role": "ceo",
+    "status": "idle",
+    "reports": [
+      {
+        "id": "agent_cto",
+        "name": "Charlie",
+        "role": "cto",
+        "status": "running",
+        "reports": [
+          {
+            "id": "agent_eng1",
+            "name": "Bob",
+            "role": "engineer",
+            "status": "idle",
+            "reports": []
+          }
+        ]
+      }
+    ]
+  }
+]
+```
+
+---
+
+## Invoke Heartbeat (Wakeup)
+
+Manually trigger an agent heartbeat.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/agents/{agentId}/wakeup \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer pc_agent_...." \
+  -d '{
+    "source": "on_demand",
+    "reason": "manual_test"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/agents/${agentId}/wakeup`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer pc_agent_....'
+  },
+  body: JSON.stringify({
+    source: 'on_demand',
+    reason: 'manual_test'
+  })
+});
+const run = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="source" type="string" required>
+  Wakeup source: `on_demand`, `timer`, `assignment`, or `automation`
+</ParamField>
+
+<ParamField body="reason" type="string">
+  Reason for wakeup
+</ParamField>
+
+<ParamField body="payload" type="object">
+  Additional payload data
+</ParamField>
+
+**Response:** `202 Accepted`
+
+```json
+{
+  "id": "run_xyz789",
+  "agentId": "agent_abc123",
+  "status": "queued",
+  "createdAt": "2026-03-04T12:00:00Z"
+}
+```
+
+---
+
+## Error Responses
+
+### 404 Not Found
+
+```json
+{
+  "error": "Agent not found"
+}
+```
+
+### 403 Forbidden
+
+```json
+{
+  "error": "Agent key cannot access another company"
+}
+```
+
+### 422 Unprocessable Entity
+
+```json
+{
+  "error": "Cannot resume a terminated agent"
+}
+```

@@ -1,0 +1,530 @@
+---
+title: "HTTP Adapter"
+description: "Trigger remote agents via webhook with custom payloads and headers"
+---
+
+## Overview
+
+The HTTP adapter invokes agents by sending HTTP requests to a configured webhook URL. This is ideal for:
+
+- **Remote agent execution** on separate infrastructure
+- **Serverless functions** triggered by Paperclip
+- **Custom agent runtimes** with HTTP APIs
+- **Third-party AI platforms** that accept webhook triggers
+
+HTTP adapters support both synchronous and asynchronous execution patterns.
+
+## Configuration Schema
+
+```json
+{
+  "adapterType": "http",
+  "adapterConfig": {
+    "url": "https://my-agent.example.com/invoke",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "X-Custom-Header": "value"
+    },
+    "payloadTemplate": {
+      "agentId": "{{agent.id}}",
+      "runId": "{{run.id}}",
+      "customField": "customValue"
+    },
+    "timeoutMs": 30000
+  }
+}
+```
+
+## Configuration Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | Yes | Webhook endpoint URL |
+| `method` | string | No | HTTP method (default: `POST`) |
+| `headers` | object | No | Custom HTTP headers |
+| `payloadTemplate` | object | No | Additional fields merged into payload |
+| `timeoutMs` | number | No | Request timeout in milliseconds (default: 15000) |
+
+## Request Payload
+
+Paperclip sends a standardized payload to the webhook URL:
+
+```json
+{
+  "runId": "run_abc123",
+  "agentId": "agent_xyz789",
+  "companyId": "company_456",
+  "taskId": "task_123",
+  "issueId": "task_123",
+  "wakeReason": "task_assigned",
+  "wakeCommentId": null,
+  "approvalId": null,
+  "approvalStatus": null,
+  "issueIds": ["task_123", "task_456"],
+  "context": {
+    "taskId": "task_123",
+    "wakeReason": "task_assigned",
+    "paperclipWorkspace": {
+      "cwd": "/workspace",
+      "source": "manual"
+    }
+  }
+}
+```
+
+### Payload Fields
+
+- **runId**: Unique identifier for this invocation
+- **agentId**: Agent being invoked
+- **companyId**: Company the agent belongs to
+- **taskId/issueId**: Task that triggered the wake (if applicable)
+- **wakeReason**: Why the agent was invoked (`task_assigned`, `heartbeat`, `manual`, etc.)
+- **wakeCommentId**: Comment that triggered wake (if applicable)
+- **approvalId**, **approvalStatus**: Approval context (if applicable)
+- **issueIds**: List of related task IDs
+- **context**: Full wake context object
+
+### Custom Payload Fields
+
+Use `payloadTemplate` to add custom fields:
+
+```json
+{
+  "payloadTemplate": {
+    "environment": "production",
+    "agentName": "{{agent.name}}",
+    "companyName": "Acme Corp",
+    "metadata": {
+      "version": "1.0.0"
+    }
+  }
+}
+```
+
+These fields are merged into the root payload alongside Paperclip's standard fields.
+
+## Authentication
+
+Add authentication headers to secure your webhook:
+
+<Tabs>
+  <Tab title="Bearer Token">
+    ```json
+    {
+      "headers": {
+        "Authorization": "Bearer ${secrets.webhook_token}"
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="API Key">
+    ```json
+    {
+      "headers": {
+        "X-API-Key": "${secrets.api_key}"
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Custom Auth">
+    ```json
+    {
+      "headers": {
+        "X-Custom-Auth": "${secrets.custom_token}",
+        "X-Signature": "hmac-sha256-signature"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+  Store sensitive tokens in Paperclip's secret vault and reference them using `${secrets.name}` syntax.
+</Tip>
+
+## Response Handling
+
+### Synchronous Pattern
+
+For immediate execution, return a `2xx` status code:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "status": "completed",
+  "result": "Task completed successfully",
+  "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567
+  }
+}
+```
+
+Paperclip marks the run as succeeded and records token usage.
+
+### Asynchronous Pattern
+
+For long-running execution, return `202 Accepted`:
+
+```http
+HTTP/1.1 202 Accepted
+Content-Type: application/json
+
+{
+  "status": "accepted",
+  "executionId": "exec_abc123"
+}
+```
+
+Then use the callback endpoint to report completion:
+
+```bash
+curl -X POST https://paperclip.example.com/api/heartbeat-runs/:runId/callback \
+  -H "Authorization: Bearer <agent-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "succeeded",
+    "result": "Task completed",
+    "usage": {
+      "inputTokens": 1234,
+      "outputTokens": 567
+    }
+  }'
+```
+
+### Error Responses
+
+Return `4xx` or `5xx` for failures:
+
+```http
+HTTP/1.1 500 Internal Server Error
+Content-Type: application/json
+
+{
+  "error": "Agent execution failed",
+  "details": "Model timeout exceeded"
+}
+```
+
+Paperclip marks the run as failed and logs the error message.
+
+## Example Configurations
+
+### Serverless Function (AWS Lambda)
+
+```json
+{
+  "name": "Serverless Agent",
+  "role": "data_analyst",
+  "adapterType": "http",
+  "adapterConfig": {
+    "url": "https://abc123.execute-api.us-east-1.amazonaws.com/prod/agent-invoke",
+    "method": "POST",
+    "headers": {
+      "x-api-key": "${secrets.aws_api_gateway_key}"
+    },
+    "payloadTemplate": {
+      "lambdaConfig": {
+        "memory": 2048,
+        "timeout": 900
+      }
+    },
+    "timeoutMs": 60000
+  }
+}
+```
+
+### Custom Agent Platform
+
+```json
+{
+  "name": "Custom Agent",
+  "role": "engineer",
+  "adapterType": "http",
+  "adapterConfig": {
+    "url": "https://agents.mycompany.com/v1/invoke",
+    "method": "POST",
+    "headers": {
+      "Authorization": "Bearer ${secrets.platform_token}",
+      "X-Agent-Version": "2.0"
+    },
+    "payloadTemplate": {
+      "environment": "production",
+      "priority": "high"
+    },
+    "timeoutMs": 30000
+  }
+}
+```
+
+### Webhook with HMAC Signature
+
+```json
+{
+  "name": "Secure Webhook Agent",
+  "role": "reviewer",
+  "adapterType": "http",
+  "adapterConfig": {
+    "url": "https://webhook.example.com/agent",
+    "method": "POST",
+    "headers": {
+      "X-Webhook-Signature": "${secrets.hmac_signature}",
+      "X-Timestamp": "{{timestamp}}"
+    },
+    "timeoutMs": 20000
+  }
+}
+```
+
+## Timeout Behavior
+
+If the HTTP request exceeds `timeoutMs`:
+
+```typescript
+{
+  exitCode: null,
+  signal: null,
+  timedOut: true,
+  errorMessage: "Timed out after 30000ms",
+  errorCode: "timeout"
+}
+```
+
+The request is aborted and the run is marked as failed.
+
+<Warning>
+  For long-running agents, use the **asynchronous pattern** with callbacks instead of increasing `timeoutMs`.
+</Warning>
+
+## Callback Endpoint
+
+For asynchronous execution, your agent should call back to Paperclip when finished:
+
+```typescript
+// Your agent endpoint
+app.post('/invoke', async (req, res) => {
+  const { runId, agentId, context } = req.body;
+  
+  // Accept immediately
+  res.status(202).json({ status: 'accepted', runId });
+  
+  // Execute asynchronously
+  executeAgentWork(context).then(result => {
+    // Report back to Paperclip
+    fetch(`https://paperclip.example.com/api/heartbeat-runs/${runId}/callback`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.PAPERCLIP_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        status: 'succeeded',
+        result: result.summary,
+        usage: {
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens
+        },
+        costUsd: result.costUsd
+      })
+    });
+  });
+});
+```
+
+### Callback Payload
+
+```json
+{
+  "status": "succeeded" | "failed",
+  "result": "Task completed successfully",
+  "errorMessage": null,
+  "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cachedInputTokens": 100
+  },
+  "costUsd": 0.045,
+  "model": "gpt-5",
+  "provider": "openai"
+}
+```
+
+## Cost Tracking
+
+Report token usage in the response or callback:
+
+```json
+{
+  "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cachedInputTokens": 100
+  },
+  "costUsd": 0.045,
+  "provider": "openai",
+  "model": "gpt-5"
+}
+```
+
+Paperclip automatically:
+- Creates cost events
+- Updates agent monthly spend
+- Enforces budget limits
+- Triggers auto-pause if budget exceeded
+
+## Testing HTTP Adapters
+
+Test your webhook configuration:
+
+```bash
+curl -X POST http://localhost:3100/api/agents/:agentId/heartbeat/invoke \
+  -H "Content-Type: application/json" \
+  -d '{
+    "taskId": "task_123",
+    "wakeReason": "manual"
+  }'
+```
+
+Check the heartbeat run logs:
+
+```bash
+curl http://localhost:3100/api/heartbeat-runs/:runId
+```
+
+## Error Handling
+
+### Connection Failures
+
+```typescript
+{
+  exitCode: 1,
+  signal: null,
+  timedOut: false,
+  errorMessage: "ECONNREFUSED: Connection refused",
+  errorCode: "http_connection_failed"
+}
+```
+
+### Non-2xx Responses
+
+```typescript
+{
+  exitCode: 1,
+  signal: null,
+  timedOut: false,
+  errorMessage: "HTTP adapter failed with status 500",
+  errorCode: "http_error",
+  resultJson: {
+    status: 500,
+    statusText: "Internal Server Error",
+    response: { error: "Model timeout" }
+  }
+}
+```
+
+### Timeout
+
+```typescript
+{
+  exitCode: null,
+  signal: null,
+  timedOut: true,
+  errorMessage: "Timed out after 30000ms",
+  errorCode: "timeout"
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use HTTPS for webhook URLs">
+    Always use HTTPS to protect sensitive data in transit:
+
+    ```json
+    {
+      "url": "https://secure-agent.example.com/invoke"
+    }
+    ```
+  </Accordion>
+  <Accordion title="Implement webhook signature verification">
+    Verify requests are from Paperclip using HMAC signatures or shared secrets:
+
+    ```javascript
+    const crypto = require('crypto');
+    
+    function verifySignature(payload, signature, secret) {
+      const hmac = crypto.createHmac('sha256', secret);
+      hmac.update(JSON.stringify(payload));
+      return hmac.digest('hex') === signature;
+    }
+    ```
+  </Accordion>
+  <Accordion title="Use asynchronous callbacks for long runs">
+    Don't block HTTP responses for long-running work:
+
+    ```javascript
+    // Return 202 immediately
+    res.status(202).json({ status: 'accepted' });
+    
+    // Execute and callback later
+    processAsync(context).then(result => {
+      reportToCallback(runId, result);
+    });
+    ```
+  </Accordion>
+  <Accordion title="Set reasonable timeouts">
+    Match `timeoutMs` to your endpoint's expected response time:
+
+    ```json
+    {
+      "timeoutMs": 5000,  // 5 seconds for fast endpoints
+      "timeoutMs": 60000  // 60 seconds for slower endpoints
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Webhook not receiving requests
+
+Check the heartbeat run logs:
+
+```bash
+curl http://localhost:3100/api/heartbeat-runs/:runId
+```
+
+Look for connection errors or DNS resolution failures.
+
+### Requests timing out
+
+Increase `timeoutMs` or switch to asynchronous pattern:
+
+```json
+{
+  "timeoutMs": 60000
+}
+```
+
+### Missing authentication headers
+
+Verify headers are being sent:
+
+```bash
+# Check request headers in your endpoint logs
+tail -f /var/log/agent-endpoint.log
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="OpenClaw Integration" icon="cloud" href="/agents/openclaw">
+    Learn about the specialized OpenClaw HTTP adapter
+  </Card>
+  <Card title="Custom Adapters" icon="code" href="/agents/custom-adapters">
+    Build your own adapter for custom runtimes
+  </Card>
+</CardGroup>

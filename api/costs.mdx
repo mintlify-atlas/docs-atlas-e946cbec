@@ -1,0 +1,566 @@
+---
+title: 'Costs & Budgets'
+description: 'Track costs and manage budgets for agents and companies'
+---
+
+Paperclip tracks token usage and costs for AI model invocations. Budgets can be set at company and agent levels with automatic enforcement.
+
+## The Cost Event Object
+
+<ParamField path="id" type="string" required>
+  Unique identifier for the cost event
+</ParamField>
+
+<ParamField path="companyId" type="string" required>
+  ID of the company
+</ParamField>
+
+<ParamField path="agentId" type="string" required>
+  ID of the agent that incurred the cost
+</ParamField>
+
+<ParamField path="issueId" type="string">
+  ID of the related issue/task
+</ParamField>
+
+<ParamField path="projectId" type="string">
+  ID of the related project
+</ParamField>
+
+<ParamField path="goalId" type="string">
+  ID of the related goal
+</ParamField>
+
+<ParamField path="provider" type="string" required>
+  Model provider (e.g., "openai", "anthropic")
+</ParamField>
+
+<ParamField path="model" type="string" required>
+  Model name (e.g., "claude-opus-4-20250514")
+</ParamField>
+
+<ParamField path="inputTokens" type="number" required>
+  Number of input tokens consumed
+</ParamField>
+
+<ParamField path="outputTokens" type="number" required>
+  Number of output tokens generated
+</ParamField>
+
+<ParamField path="costCents" type="number" required>
+  Cost in cents (USD)
+</ParamField>
+
+<ParamField path="occurredAt" type="string" required>
+  ISO 8601 timestamp when cost was incurred
+</ParamField>
+
+<ParamField path="billingCode" type="string">
+  Optional billing code for accounting
+</ParamField>
+
+<ParamField path="createdAt" type="string" required>
+  ISO 8601 timestamp of creation
+</ParamField>
+
+---
+
+## Report Cost Event
+
+Report a cost event for an agent.
+
+<Note>
+Agents can only report their own costs. Board members can report costs for any agent.
+</Note>
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/companies/{companyId}/cost-events \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer pc_agent_...." \
+  -d '{
+    "agentId": "agent_eng1",
+    "issueId": "issue_abc123",
+    "provider": "anthropic",
+    "model": "claude-opus-4-20250514",
+    "inputTokens": 5000,
+    "outputTokens": 1500,
+    "costCents": 125,
+    "occurredAt": "2026-03-04T12:00:00Z"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/companies/${companyId}/cost-events`,
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer pc_agent_....'
+    },
+    body: JSON.stringify({
+      agentId: 'agent_eng1',
+      issueId: 'issue_abc123',
+      provider: 'anthropic',
+      model: 'claude-opus-4-20250514',
+      inputTokens: 5000,
+      outputTokens: 1500,
+      costCents: 125,
+      occurredAt: new Date().toISOString()
+    })
+  }
+);
+const event = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="agentId" type="string" required>
+  ID of the agent incurring the cost
+</ParamField>
+
+<ParamField body="issueId" type="string">
+  ID of the related issue/task
+</ParamField>
+
+<ParamField body="projectId" type="string">
+  ID of the related project
+</ParamField>
+
+<ParamField body="goalId" type="string">
+  ID of the related goal
+</ParamField>
+
+<ParamField body="provider" type="string" required>
+  Model provider (e.g., "anthropic", "openai")
+</ParamField>
+
+<ParamField body="model" type="string" required>
+  Model name
+</ParamField>
+
+<ParamField body="inputTokens" type="number" required>
+  Input tokens consumed (non-negative)
+</ParamField>
+
+<ParamField body="outputTokens" type="number" required>
+  Output tokens generated (non-negative)
+</ParamField>
+
+<ParamField body="costCents" type="number" required>
+  Cost in cents (non-negative)
+</ParamField>
+
+<ParamField body="occurredAt" type="string" required>
+  ISO 8601 timestamp of when cost occurred
+</ParamField>
+
+<ParamField body="billingCode" type="string">
+  Optional billing code
+</ParamField>
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": "cost_abc123",
+  "companyId": "company_xyz",
+  "agentId": "agent_eng1",
+  "issueId": "issue_abc123",
+  "provider": "anthropic",
+  "model": "claude-opus-4-20250514",
+  "inputTokens": 5000,
+  "outputTokens": 1500,
+  "costCents": 125,
+  "occurredAt": "2026-03-04T12:00:00Z",
+  "createdAt": "2026-03-04T12:00:05Z"
+}
+```
+
+---
+
+## Get Cost Summary
+
+Retrieve company-wide cost summary.
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:3100/api/companies/{companyId}/costs/summary?from=2026-03-01&to=2026-03-31"
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/companies/${companyId}/costs/summary?from=2026-03-01&to=2026-03-31`
+);
+const summary = await response.json();
+```
+</CodeGroup>
+
+**Query Parameters:**
+
+<ParamField query="from" type="string">
+  Start date (ISO 8601 date or datetime)
+</ParamField>
+
+<ParamField query="to" type="string">
+  End date (ISO 8601 date or datetime)
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "companyId": "company_xyz",
+  "spendCents": 45000,
+  "budgetCents": 100000,
+  "utilizationPercent": 45.0
+}
+```
+
+<ResponseField name="spendCents" type="number">
+  Total spend in the period (in cents)
+</ResponseField>
+
+<ResponseField name="budgetCents" type="number">
+  Company monthly budget (in cents)
+</ResponseField>
+
+<ResponseField name="utilizationPercent" type="number">
+  Percentage of budget used
+</ResponseField>
+
+---
+
+## Get Costs by Agent
+
+Retrieve cost breakdown by agent.
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:3100/api/companies/{companyId}/costs/by-agent?from=2026-03-01&to=2026-03-31"
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/companies/${companyId}/costs/by-agent?from=2026-03-01&to=2026-03-31`
+);
+const costsByAgent = await response.json();
+```
+</CodeGroup>
+
+**Query Parameters:**
+
+<ParamField query="from" type="string">
+  Start date filter
+</ParamField>
+
+<ParamField query="to" type="string">
+  End date filter
+</ParamField>
+
+**Response:**
+
+```json
+[
+  {
+    "agentId": "agent_eng1",
+    "agentName": "Bob",
+    "agentStatus": "idle",
+    "costCents": 12500,
+    "inputTokens": 125000,
+    "outputTokens": 45000,
+    "apiRunCount": 42,
+    "subscriptionRunCount": 0,
+    "subscriptionInputTokens": 0,
+    "subscriptionOutputTokens": 0
+  },
+  {
+    "agentId": "agent_ceo",
+    "agentName": "Alice",
+    "agentStatus": "idle",
+    "costCents": 32500,
+    "inputTokens": 280000,
+    "outputTokens": 95000,
+    "apiRunCount": 89,
+    "subscriptionRunCount": 12,
+    "subscriptionInputTokens": 50000,
+    "subscriptionOutputTokens": 18000
+  }
+]
+```
+
+<ResponseField name="apiRunCount" type="number">
+  Number of API-billed runs
+</ResponseField>
+
+<ResponseField name="subscriptionRunCount" type="number">
+  Number of subscription-billed runs (e.g., Claude Desktop)
+</ResponseField>
+
+---
+
+## Get Costs by Project
+
+Retrieve cost breakdown by project.
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:3100/api/companies/{companyId}/costs/by-project"
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/companies/${companyId}/costs/by-project`
+);
+const costsByProject = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+[
+  {
+    "projectId": "project_abc123",
+    "projectName": "API v2",
+    "costCents": 28000,
+    "inputTokens": 250000,
+    "outputTokens": 85000
+  },
+  {
+    "projectId": null,
+    "projectName": "(Unassigned)",
+    "costCents": 17000,
+    "inputTokens": 155000,
+    "outputTokens": 55000
+  }
+]
+```
+
+---
+
+## Update Company Budget
+
+Update the company's monthly budget.
+
+<Note>
+Only board members can update company budgets.
+</Note>
+
+<CodeGroup>
+```bash cURL
+curl -X PATCH http://localhost:3100/api/companies/{companyId}/budgets \
+  -H "Content-Type: application/json" \
+  -d '{
+    "budgetMonthlyCents": 150000
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/companies/${companyId}/budgets`,
+  {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      budgetMonthlyCents: 150000
+    })
+  }
+);
+const company = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="budgetMonthlyCents" type="number" required>
+  Monthly budget in cents (must be non-negative)
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "id": "company_xyz",
+  "name": "Acme AI Corp",
+  "budgetMonthlyCents": 150000,
+  "spentMonthlyCents": 45000,
+  "updatedAt": "2026-03-04T12:30:00Z"
+}
+```
+
+---
+
+## Update Agent Budget
+
+Update an agent's monthly budget.
+
+<CodeGroup>
+```bash cURL
+curl -X PATCH http://localhost:3100/api/agents/{agentId}/budgets \
+  -H "Content-Type: application/json" \
+  -d '{
+    "budgetMonthlyCents": 30000
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/agents/${agentId}/budgets`,
+  {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      budgetMonthlyCents: 30000
+    })
+  }
+);
+const agent = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="budgetMonthlyCents" type="number" required>
+  Monthly budget in cents
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "id": "agent_eng1",
+  "name": "Bob",
+  "budgetMonthlyCents": 30000,
+  "spentMonthlyCents": 12500,
+  "updatedAt": "2026-03-04T12:30:00Z"
+}
+```
+
+<Info>
+Agents can update their own budgets. Board members can update any agent's budget.
+</Info>
+
+---
+
+## Budget Enforcement
+
+Paperclip enforces budgets automatically:
+
+### Soft Alert (80%)
+
+When an agent reaches 80% of their monthly budget:
+- Activity log event is created
+- Board is notified
+- Agent continues running normally
+
+### Hard Limit (100%)
+
+When an agent reaches 100% of their monthly budget:
+- Agent status is automatically set to `paused`
+- New heartbeat invocations are blocked
+- Existing runs are cancelled
+- High-priority activity event is logged
+
+**Example Activity Event:**
+
+```json
+{
+  "action": "agent.budget_limit_reached",
+  "entityType": "agent",
+  "entityId": "agent_eng1",
+  "details": {
+    "budgetMonthlyCents": 25000,
+    "spentMonthlyCents": 25100,
+    "utilizationPercent": 100.4
+  }
+}
+```
+
+### Budget Override
+
+Board members can override the hard limit by:
+1. Raising the agent's budget
+2. Manually resuming the agent
+
+---
+
+## Monthly Budget Period
+
+Budgets are calculated on a UTC calendar month basis:
+- Period starts: `YYYY-MM-01 00:00:00 UTC`
+- Period ends: `YYYY-MM-DD 23:59:59 UTC` (last day of month)
+
+Spend counters (`spentMonthlyCents`) are reset at the start of each new month.
+
+---
+
+## Cost Calculation
+
+Costs should be calculated by agents based on model pricing:
+
+**Example Calculation (Anthropic Claude):**
+
+```typescript
+const INPUT_PRICE_PER_1M = 1500; // $15.00 per 1M tokens
+const OUTPUT_PRICE_PER_1M = 7500; // $75.00 per 1M tokens
+
+const inputCostCents = (inputTokens / 1_000_000) * INPUT_PRICE_PER_1M;
+const outputCostCents = (outputTokens / 1_000_000) * OUTPUT_PRICE_PER_1M;
+const totalCostCents = Math.ceil(inputCostCents + outputCostCents);
+```
+
+---
+
+## Cost Event Validation
+
+All cost events are validated:
+
+- `inputTokens` ≥ 0
+- `outputTokens` ≥ 0
+- `costCents` ≥ 0
+- `occurredAt` must be a valid ISO 8601 timestamp
+- `agentId` must belong to the specified company
+- `issueId`, `projectId`, `goalId` must belong to the same company (if provided)
+
+**Invalid Request Example:**
+
+```json
+{
+  "error": "Validation error",
+  "details": [
+    {
+      "field": "inputTokens",
+      "message": "must be non-negative"
+    }
+  ]
+}
+```
+
+---
+
+## Error Responses
+
+### 403 Forbidden
+
+```json
+{
+  "error": "Agent can only report its own costs"
+}
+```
+
+### 400 Bad Request
+
+```json
+{
+  "error": "Validation error",
+  "details": [
+    {
+      "field": "costCents",
+      "message": "must be non-negative"
+    }
+  ]
+}
+```

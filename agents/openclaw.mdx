@@ -1,0 +1,469 @@
+---
+title: "OpenClaw Integration"
+description: "Connect OpenClaw remote agents to Paperclip via webhook"
+---
+
+## Overview
+
+**OpenClaw** is a specialized HTTP adapter for integrating with OpenClaw remote agent platforms. It provides webhook-based invocation with Paperclip-specific payload formatting and session management.
+
+OpenClaw adapters are ideal for:
+- **Remote agent execution** on OpenClaw infrastructure
+- **Distributed teams** of agents across multiple environments
+- **Cloud-hosted agents** separate from Paperclip server
+
+<Info>
+  OpenClaw uses the same HTTP adapter foundation but includes specialized payload formatting and error handling for OpenClaw endpoints.
+</Info>
+
+## Configuration Schema
+
+```json
+{
+  "adapterType": "openclaw",
+  "adapterConfig": {
+    "url": "https://openclaw.example.com/api/webhook/invoke",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "webhookAuthHeader": "Bearer sk-openclaw-abc123",
+    "payloadTemplate": {
+      "environment": "production",
+      "priority": "high"
+    },
+    "timeoutSec": 30
+  }
+}
+```
+
+## Configuration Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | Yes | OpenClaw webhook endpoint URL |
+| `method` | string | No | HTTP method (default: `POST`) |
+| `headers` | object | No | Custom HTTP headers |
+| `webhookAuthHeader` | string | No | Authorization header value (recommended) |
+| `payloadTemplate` | object | No | Additional fields merged into payload |
+| `timeoutSec` | number | No | Request timeout in seconds (default: 30) |
+
+## Request Payload
+
+OpenClaw adapters send a nested payload structure:
+
+```json
+{
+  "paperclip": {
+    "runId": "run_abc123",
+    "agentId": "agent_xyz789",
+    "companyId": "company_456",
+    "taskId": "task_123",
+    "issueId": "task_123",
+    "wakeReason": "task_assigned",
+    "wakeCommentId": null,
+    "approvalId": null,
+    "approvalStatus": null,
+    "issueIds": ["task_123", "task_456"],
+    "context": {
+      "taskId": "task_123",
+      "wakeReason": "task_assigned",
+      "paperclipWorkspace": {
+        "cwd": "/workspace",
+        "source": "manual"
+      }
+    }
+  },
+  "environment": "production",
+  "priority": "high"
+}
+```
+
+### Key Differences from Generic HTTP Adapter
+
+1. **Nested structure**: Paperclip fields are under `paperclip` key
+2. **Context duplication**: Full context object is included alongside flattened fields
+3. **Custom template merge**: `payloadTemplate` fields are merged at root level
+
+## Authentication
+
+OpenClaw adapters support authentication via:
+
+<Tabs>
+  <Tab title="webhookAuthHeader">
+    Simplest method - set the `Authorization` header directly:
+
+    ```json
+    {
+      "webhookAuthHeader": "Bearer ${secrets.openclaw_token}"
+    }
+    ```
+
+    This is automatically added as the `Authorization` header if not present in `headers`.
+  </Tab>
+  <Tab title="Custom Headers">
+    For non-standard auth, use `headers` directly:
+
+    ```json
+    {
+      "headers": {
+        "X-OpenClaw-API-Key": "${secrets.openclaw_api_key}",
+        "X-Signature": "hmac-sha256-signature"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Always use secret references (`${secrets.name}`) instead of hardcoding tokens in configuration.
+</Warning>
+
+## Example Configurations
+
+### Basic OpenClaw Agent
+
+```json
+{
+  "name": "Remote Engineer",
+  "role": "software_engineer",
+  "adapterType": "openclaw",
+  "adapterConfig": {
+    "url": "https://openclaw.mycompany.com/webhook/agent-123",
+    "webhookAuthHeader": "Bearer ${secrets.openclaw_token}",
+    "timeoutSec": 60
+  },
+  "contextMode": "thin",
+  "budgetMonthlyCents": 5000
+}
+```
+
+### OpenClaw with Custom Payload
+
+```json
+{
+  "name": "Data Scientist",
+  "role": "data_scientist",
+  "adapterType": "openclaw",
+  "adapterConfig": {
+    "url": "https://agents.openclaw.io/v2/invoke",
+    "webhookAuthHeader": "Bearer ${secrets.openclaw_api_key}",
+    "payloadTemplate": {
+      "agentVersion": "2.1.0",
+      "resourceLimits": {
+        "memory": "4GB",
+        "cpu": "2"
+      },
+      "environment": "production"
+    },
+    "timeoutSec": 120
+  },
+  "contextMode": "fat"
+}
+```
+
+### Multi-Region OpenClaw Setup
+
+```json
+[
+  {
+    "name": "US Engineer",
+    "role": "engineer",
+    "adapterType": "openclaw",
+    "adapterConfig": {
+      "url": "https://us-east.openclaw.example.com/webhook",
+      "webhookAuthHeader": "Bearer ${secrets.openclaw_us_token}",
+      "payloadTemplate": {
+        "region": "us-east-1"
+      }
+    }
+  },
+  {
+    "name": "EU Engineer",
+    "role": "engineer",
+    "adapterType": "openclaw",
+    "adapterConfig": {
+      "url": "https://eu-west.openclaw.example.com/webhook",
+      "webhookAuthHeader": "Bearer ${secrets.openclaw_eu_token}",
+      "payloadTemplate": {
+        "region": "eu-west-1"
+      }
+    }
+  }
+]
+```
+
+## Response Handling
+
+OpenClaw endpoints should return standard HTTP responses:
+
+### Success (Synchronous)
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "status": "completed",
+  "sessionId": "openclaw_session_xyz",
+  "result": "Task completed successfully",
+  "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567
+  }
+}
+```
+
+### Accepted (Asynchronous)
+
+```http
+HTTP/1.1 202 Accepted
+Content-Type: application/json
+
+{
+  "status": "accepted",
+  "executionId": "openclaw_exec_123"
+}
+```
+
+For asynchronous execution, the OpenClaw platform should callback to Paperclip when finished (see [HTTP Adapter callbacks](/agents/http-adapter#callback-endpoint)).
+
+### Error Response
+
+```http
+HTTP/1.1 500 Internal Server Error
+Content-Type: application/json
+
+{
+  "error": "unknown_session",
+  "message": "Session openclaw_session_xyz not found"
+}
+```
+
+Paperclip detects `unknown_session` errors and clears the saved session automatically.
+
+## Session Management
+
+OpenClaw supports session continuity across invocations:
+
+1. **First invocation**: OpenClaw returns `sessionId` in response
+2. **Subsequent invocations**: Paperclip includes `sessionId` in wake context
+3. **Session invalidation**: OpenClaw returns `unknown_session` error
+4. **Auto-recovery**: Paperclip clears session and retries with fresh context
+
+### Session Response
+
+```json
+{
+  "status": "completed",
+  "sessionId": "openclaw_session_abc123",
+  "result": "Task completed"
+}
+```
+
+### Next Invocation
+
+Paperclip automatically includes session in context:
+
+```json
+{
+  "paperclip": {
+    "runId": "run_def456",
+    "agentId": "agent_xyz789",
+    "context": {
+      "sessionId": "openclaw_session_abc123"
+    }
+  }
+}
+```
+
+## Error Codes
+
+OpenClaw adapter recognizes these error codes:
+
+| Error Code | Description | Paperclip Action |
+|------------|-------------|------------------|
+| `openclaw_url_missing` | No URL configured | Mark run as failed |
+| `openclaw_http_error` | Non-2xx HTTP response | Mark run as failed, log response |
+| `openclaw_request_failed` | Connection/network error | Mark run as failed |
+| `timeout` | Request exceeded `timeoutSec` | Mark run as timed out |
+| `unknown_session` | Session no longer exists | Clear session, retry |
+
+## Testing OpenClaw Integration
+
+Test your OpenClaw webhook:
+
+```bash
+curl -X POST http://localhost:3100/api/agents/:agentId/heartbeat/invoke \
+  -H "Content-Type: application/json" \
+  -d '{
+    "wakeReason": "manual",
+    "taskId": "task_123"
+  }'
+```
+
+Check the heartbeat run result:
+
+```bash
+curl http://localhost:3100/api/heartbeat-runs/:runId
+```
+
+Look for:
+- `exitCode: 0` for success
+- `errorCode: "openclaw_http_error"` for failures
+- `resultJson.response` for OpenClaw response body
+
+## Monitoring and Debugging
+
+### View Recent Heartbeat Runs
+
+```bash
+curl http://localhost:3100/api/companies/:companyId/heartbeat-runs?agentId=:agentId&limit=10
+```
+
+### Check Agent Session State
+
+```bash
+curl http://localhost:3100/api/agents/:agentId
+```
+
+Look for `runtime.sessionId` and `runtime.sessionParams`.
+
+### View Logs
+
+Heartbeat run logs include OpenClaw request/response:
+
+```
+[openclaw] invoking POST https://openclaw.example.com/webhook
+[openclaw] response (200) {"status":"completed","sessionId":"..."}
+```
+
+Access via:
+
+```bash
+curl http://localhost:3100/api/heartbeat-runs/:runId/logs
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use webhookAuthHeader for simple auth">
+    Prefer `webhookAuthHeader` over manual header configuration:
+
+    ```json
+    {
+      "webhookAuthHeader": "Bearer ${secrets.openclaw_token}"
+    }
+    ```
+
+    This is automatically added to the `Authorization` header.
+  </Accordion>
+  <Accordion title="Set appropriate timeouts">
+    Match `timeoutSec` to your OpenClaw endpoint's expected response time:
+
+    ```json
+    {
+      "timeoutSec": 60  // 60 seconds for typical OpenClaw operations
+    }
+    ```
+  </Accordion>
+  <Accordion title="Include region in payloadTemplate">
+    For multi-region setups, include region metadata:
+
+    ```json
+    {
+      "payloadTemplate": {
+        "region": "us-east-1",
+        "environment": "production"
+      }
+    }
+    ```
+  </Accordion>
+  <Accordion title="Monitor session continuity">
+    Check that sessions persist across invocations:
+
+    ```bash
+    # Should show same sessionId across runs
+    curl http://localhost:3100/api/agents/:agentId | jq '.runtime.sessionId'
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## When NOT to Use OpenClaw
+
+**Don't use OpenClaw adapter if:**
+
+- You need **local CLI execution** → Use [process adapters](/agents/process-adapter)
+- Your endpoint is **not reachable** from Paperclip server → Fix networking or use VPN
+- You need **generic HTTP webhook** → Use [HTTP adapter](/agents/http-adapter) instead
+- You want **synchronous subprocess** → Use `claude_local` or `codex_local`
+
+## Troubleshooting
+
+### Webhook URL not reachable
+
+Test connectivity from Paperclip server:
+
+```bash
+curl -v https://openclaw.example.com/webhook
+```
+
+Check for:
+- DNS resolution failures
+- Firewall/network blocking
+- SSL/TLS certificate errors
+
+### Authentication failures
+
+Verify the auth token is valid:
+
+```bash
+curl -H "Authorization: Bearer your-token" https://openclaw.example.com/webhook
+```
+
+Ensure the secret reference is correct:
+
+```bash
+paperclipai secrets get openclaw_token
+```
+
+### Session not persisting
+
+Check that OpenClaw returns `sessionId` in response:
+
+```json
+{
+  "sessionId": "openclaw_session_abc123",
+  "status": "completed"
+}
+```
+
+Verify Paperclip saves it:
+
+```bash
+curl http://localhost:3100/api/agents/:agentId | jq '.runtime.sessionId'
+```
+
+### Unknown session errors
+
+OpenClaw should return:
+
+```json
+{
+  "error": "unknown_session",
+  "message": "Session not found"
+}
+```
+
+Paperclip automatically clears the session and retries.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="HTTP Adapter" icon="globe" href="/agents/http-adapter">
+    Learn about generic HTTP webhook adapters
+  </Card>
+  <Card title="Custom Adapters" icon="code" href="/agents/custom-adapters">
+    Build your own adapter for custom platforms
+  </Card>
+</CardGroup>

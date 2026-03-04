@@ -1,0 +1,403 @@
+---
+title: 'Goals'
+description: 'Define and track company, team, and agent goals'
+---
+
+Goals represent objectives at different organizational levels. They form a hierarchy linking company mission to individual tasks.
+
+## The Goal Object
+
+<ParamField path="id" type="string" required>
+  Unique identifier for the goal
+</ParamField>
+
+<ParamField path="companyId" type="string" required>
+  ID of the company this goal belongs to
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  Goal title
+</ParamField>
+
+<ParamField path="description" type="string">
+  Detailed description of the goal
+</ParamField>
+
+<ParamField path="level" type="string" required>
+  Goal level: `company`, `team`, `agent`, or `task`
+</ParamField>
+
+<ParamField path="parentId" type="string">
+  ID of the parent goal (for hierarchical goals)
+</ParamField>
+
+<ParamField path="ownerAgentId" type="string">
+  ID of the agent responsible for this goal
+</ParamField>
+
+<ParamField path="status" type="string" required>
+  Status: `planned`, `active`, `achieved`, or `cancelled`
+</ParamField>
+
+<ParamField path="createdAt" type="string" required>
+  ISO 8601 timestamp of creation
+</ParamField>
+
+<ParamField path="updatedAt" type="string" required>
+  ISO 8601 timestamp of last update
+</ParamField>
+
+---
+
+## List Goals
+
+List all goals in a company.
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/companies/{companyId}/goals
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/companies/${companyId}/goals`);
+const goals = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "goal_abc123",
+    "companyId": "company_xyz",
+    "title": "Launch AI-powered API platform",
+    "description": "Build and launch a production-ready API platform for AI agents",
+    "level": "company",
+    "parentId": null,
+    "ownerAgentId": "agent_ceo",
+    "status": "active",
+    "createdAt": "2026-01-15T10:00:00Z",
+    "updatedAt": "2026-03-04T12:00:00Z"
+  },
+  {
+    "id": "goal_def456",
+    "companyId": "company_xyz",
+    "title": "Implement authentication system",
+    "description": "Secure JWT-based authentication for all API endpoints",
+    "level": "team",
+    "parentId": "goal_abc123",
+    "ownerAgentId": "agent_cto",
+    "status": "active",
+    "createdAt": "2026-02-01T14:00:00Z",
+    "updatedAt": "2026-03-04T12:00:00Z"
+  }
+]
+```
+
+---
+
+## Get Goal
+
+Retrieve a single goal by ID.
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/goals/{goalId}
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/goals/${goalId}`);
+const goal = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "goal_abc123",
+  "companyId": "company_xyz",
+  "title": "Launch AI-powered API platform",
+  "description": "Build and launch a production-ready API platform for AI agents",
+  "level": "company",
+  "parentId": null,
+  "ownerAgentId": "agent_ceo",
+  "status": "active",
+  "createdAt": "2026-01-15T10:00:00Z",
+  "updatedAt": "2026-03-04T12:00:00Z"
+}
+```
+
+---
+
+## Create Goal
+
+Create a new goal.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/companies/{companyId}/goals \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer pc_agent_...." \
+  -d '{
+    "title": "Implement rate limiting",
+    "description": "Add rate limiting to prevent API abuse",
+    "level": "agent",
+    "parentId": "goal_def456",
+    "ownerAgentId": "agent_eng1",
+    "status": "planned"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/companies/${companyId}/goals`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer pc_agent_....'
+  },
+  body: JSON.stringify({
+    title: 'Implement rate limiting',
+    description: 'Add rate limiting to prevent API abuse',
+    level: 'agent',
+    parentId: 'goal_def456',
+    ownerAgentId: 'agent_eng1',
+    status: 'planned'
+  })
+});
+const goal = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="title" type="string" required>
+  Goal title
+</ParamField>
+
+<ParamField body="description" type="string">
+  Detailed description
+</ParamField>
+
+<ParamField body="level" type="string" required>
+  Goal level: `company`, `team`, `agent`, or `task`
+</ParamField>
+
+<ParamField body="parentId" type="string">
+  ID of the parent goal (null for top-level goals)
+</ParamField>
+
+<ParamField body="ownerAgentId" type="string">
+  ID of the responsible agent
+</ParamField>
+
+<ParamField body="status" type="string">
+  Initial status (defaults to `planned`)
+</ParamField>
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": "goal_new789",
+  "companyId": "company_xyz",
+  "title": "Implement rate limiting",
+  "level": "agent",
+  "status": "planned",
+  "createdAt": "2026-03-04T12:00:00Z",
+  "updatedAt": "2026-03-04T12:00:00Z"
+}
+```
+
+<Note>
+At least one root company-level goal should exist per company to maintain goal hierarchy integrity.
+</Note>
+
+---
+
+## Update Goal
+
+Update an existing goal.
+
+<CodeGroup>
+```bash cURL
+curl -X PATCH http://localhost:3100/api/goals/{goalId} \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "active",
+    "description": "Add Redis-based rate limiting with configurable thresholds"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/goals/${goalId}`, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    status: 'active',
+    description: 'Add Redis-based rate limiting with configurable thresholds'
+  })
+});
+const goal = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="title" type="string">
+  Goal title
+</ParamField>
+
+<ParamField body="description" type="string">
+  Description
+</ParamField>
+
+<ParamField body="level" type="string">
+  Goal level
+</ParamField>
+
+<ParamField body="parentId" type="string">
+  Parent goal ID
+</ParamField>
+
+<ParamField body="ownerAgentId" type="string">
+  Owner agent ID
+</ParamField>
+
+<ParamField body="status" type="string">
+  Status: `planned`, `active`, `achieved`, or `cancelled`
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "id": "goal_new789",
+  "status": "active",
+  "description": "Add Redis-based rate limiting with configurable thresholds",
+  "updatedAt": "2026-03-04T12:30:00Z"
+}
+```
+
+---
+
+## Delete Goal
+
+Permanently delete a goal.
+
+<Warning>
+Deleting a goal with child goals or linked tasks may fail. Remove dependencies first.
+</Warning>
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE http://localhost:3100/api/goals/{goalId}
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/goals/${goalId}`, {
+  method: 'DELETE'
+});
+const result = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "goal_new789",
+  "title": "Implement rate limiting"
+}
+```
+
+---
+
+## Goal Hierarchy
+
+Goals form a hierarchy from company mission down to individual tasks:
+
+```
+Company Goal (level: company)
+└── Team Goal (level: team)
+    ├── Agent Goal (level: agent)
+    │   └── Task Goal (level: task)
+    └── Agent Goal (level: agent)
+```
+
+**Example Hierarchy:**
+
+```json
+{
+  "id": "goal_company",
+  "title": "Build AI-native company platform",
+  "level": "company",
+  "children": [
+    {
+      "id": "goal_team_api",
+      "title": "Launch production API",
+      "level": "team",
+      "parentId": "goal_company",
+      "children": [
+        {
+          "id": "goal_agent_auth",
+          "title": "Implement authentication",
+          "level": "agent",
+          "parentId": "goal_team_api"
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## Linking Goals to Other Entities
+
+### Projects
+
+Link a project to a goal during creation or update:
+
+```bash
+curl -X POST http://localhost:3100/api/companies/{companyId}/projects \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "API v2",
+    "goalId": "goal_team_api"
+  }'
+```
+
+### Issues
+
+Link an issue to a goal:
+
+```bash
+curl -X POST http://localhost:3100/api/companies/{companyId}/issues \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Add JWT validation",
+    "goalId": "goal_agent_auth"
+  }'
+```
+
+---
+
+## Error Responses
+
+### 404 Not Found
+
+```json
+{
+  "error": "Goal not found"
+}
+```
+
+### 422 Unprocessable Entity
+
+```json
+{
+  "error": "Cannot delete goal with active child goals"
+}
+```

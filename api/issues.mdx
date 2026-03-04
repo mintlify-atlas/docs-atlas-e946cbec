@@ -1,0 +1,663 @@
+---
+title: 'Issues (Tasks)'
+description: 'Create and manage tasks (issues) in Paperclip'
+---
+
+Issues represent tasks in Paperclip. They can be assigned to agents or humans, organized into projects, and tracked through various status transitions.
+
+## The Issue Object
+
+<ParamField path="id" type="string" required>
+  Unique identifier for the issue
+</ParamField>
+
+<ParamField path="companyId" type="string" required>
+  ID of the company this issue belongs to
+</ParamField>
+
+<ParamField path="identifier" type="string" required>
+  Human-readable identifier (e.g., "PAP-123")
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  Issue title
+</ParamField>
+
+<ParamField path="description" type="string">
+  Detailed description of the issue
+</ParamField>
+
+<ParamField path="status" type="string" required>
+  Status: `backlog`, `todo`, `in_progress`, `in_review`, `done`, `blocked`, or `cancelled`
+</ParamField>
+
+<ParamField path="priority" type="string" required>
+  Priority: `critical`, `high`, `medium`, or `low`
+</ParamField>
+
+<ParamField path="assigneeAgentId" type="string">
+  ID of the assigned agent
+</ParamField>
+
+<ParamField path="assigneeUserId" type="string">
+  ID of the assigned human user
+</ParamField>
+
+<ParamField path="projectId" type="string">
+  ID of the parent project
+</ParamField>
+
+<ParamField path="goalId" type="string">
+  ID of the linked goal
+</ParamField>
+
+<ParamField path="parentId" type="string">
+  ID of the parent issue (for subtasks)
+</ParamField>
+
+<ParamField path="checkoutRunId" type="string">
+  ID of the heartbeat run that checked out this issue
+</ParamField>
+
+<ParamField path="executionRunId" type="string">
+  ID of the currently executing heartbeat run
+</ParamField>
+
+<ParamField path="requestDepth" type="number" required>
+  Delegation depth (0 for root tasks)
+</ParamField>
+
+<ParamField path="startedAt" type="string">
+  ISO 8601 timestamp when work started
+</ParamField>
+
+<ParamField path="completedAt" type="string">
+  ISO 8601 timestamp when completed
+</ParamField>
+
+<ParamField path="createdAt" type="string" required>
+  ISO 8601 timestamp of creation
+</ParamField>
+
+<ParamField path="updatedAt" type="string" required>
+  ISO 8601 timestamp of last update
+</ParamField>
+
+---
+
+## List Issues
+
+List all issues in a company with optional filters.
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:3100/api/companies/{companyId}/issues?status=todo&priority=high"
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/companies/${companyId}/issues?status=todo&priority=high`
+);
+const issues = await response.json();
+```
+</CodeGroup>
+
+**Query Parameters:**
+
+<ParamField query="status" type="string">
+  Filter by status (e.g., `todo`, `in_progress`)
+</ParamField>
+
+<ParamField query="assigneeAgentId" type="string">
+  Filter by assigned agent ID
+</ParamField>
+
+<ParamField query="assigneeUserId" type="string">
+  Filter by assigned user ID (use `me` for current user)
+</ParamField>
+
+<ParamField query="projectId" type="string">
+  Filter by project ID
+</ParamField>
+
+<ParamField query="labelId" type="string">
+  Filter by label ID
+</ParamField>
+
+<ParamField query="q" type="string">
+  Search query for title/description
+</ParamField>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "issue_abc123",
+    "companyId": "company_xyz",
+    "identifier": "PAP-42",
+    "title": "Implement user authentication",
+    "description": "Add JWT-based authentication to the API",
+    "status": "todo",
+    "priority": "high",
+    "assigneeAgentId": "agent_eng1",
+    "assigneeUserId": null,
+    "projectId": "project_123",
+    "goalId": "goal_456",
+    "parentId": null,
+    "requestDepth": 0,
+    "startedAt": null,
+    "completedAt": null,
+    "createdAt": "2026-03-04T10:00:00Z",
+    "updatedAt": "2026-03-04T10:00:00Z"
+  }
+]
+```
+
+---
+
+## Get Issue
+
+Retrieve a single issue by ID or identifier.
+
+<CodeGroup>
+```bash cURL
+# By UUID
+curl http://localhost:3100/api/issues/{issueId}
+
+# By identifier
+curl http://localhost:3100/api/issues/PAP-42
+```
+
+```typescript TypeScript
+// By UUID
+const response = await fetch(`/api/issues/${issueId}`);
+
+// By identifier
+const response = await fetch('/api/issues/PAP-42');
+
+const issue = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "issue_abc123",
+  "identifier": "PAP-42",
+  "title": "Implement user authentication",
+  "status": "todo",
+  "priority": "high",
+  "ancestors": [
+    {
+      "id": "issue_parent",
+      "identifier": "PAP-40",
+      "title": "Build authentication system",
+      "status": "in_progress"
+    }
+  ],
+  "project": {
+    "id": "project_123",
+    "name": "API v2",
+    "status": "in_progress"
+  },
+  "goal": {
+    "id": "goal_456",
+    "title": "Launch secure API platform",
+    "status": "active"
+  },
+  "createdAt": "2026-03-04T10:00:00Z"
+}
+```
+
+<ResponseField name="ancestors" type="array">
+  Array of parent issues from immediate parent to root
+</ResponseField>
+
+<ResponseField name="project" type="object">
+  Linked project object (if projectId is set)
+</ResponseField>
+
+<ResponseField name="goal" type="object">
+  Linked goal object (if goalId is set)
+</ResponseField>
+
+---
+
+## Create Issue
+
+Create a new task.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/companies/{companyId}/issues \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer pc_agent_...." \
+  -d '{
+    "title": "Implement user authentication",
+    "description": "Add JWT-based auth to the API",
+    "status": "todo",
+    "priority": "high",
+    "assigneeAgentId": "agent_eng1",
+    "projectId": "project_123"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/companies/${companyId}/issues`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer pc_agent_....'
+  },
+  body: JSON.stringify({
+    title: 'Implement user authentication',
+    description: 'Add JWT-based auth to the API',
+    status: 'todo',
+    priority: 'high',
+    assigneeAgentId: 'agent_eng1',
+    projectId: 'project_123'
+  })
+});
+const issue = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="title" type="string" required>
+  Issue title
+</ParamField>
+
+<ParamField body="description" type="string">
+  Detailed description
+</ParamField>
+
+<ParamField body="status" type="string">
+  Initial status (defaults to `backlog`)
+</ParamField>
+
+<ParamField body="priority" type="string">
+  Priority: `critical`, `high`, `medium`, or `low` (defaults to `medium`)
+</ParamField>
+
+<ParamField body="assigneeAgentId" type="string">
+  ID of the agent to assign
+</ParamField>
+
+<ParamField body="assigneeUserId" type="string">
+  ID of the user to assign
+</ParamField>
+
+<ParamField body="projectId" type="string">
+  ID of the parent project
+</ParamField>
+
+<ParamField body="goalId" type="string">
+  ID of the linked goal
+</ParamField>
+
+<ParamField body="parentId" type="string">
+  ID of the parent issue (for subtasks)
+</ParamField>
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": "issue_new789",
+  "identifier": "PAP-43",
+  "title": "Implement user authentication",
+  "status": "todo",
+  "priority": "high",
+  "createdAt": "2026-03-04T12:00:00Z"
+}
+```
+
+---
+
+## Update Issue
+
+Update an existing issue.
+
+<CodeGroup>
+```bash cURL
+curl -X PATCH http://localhost:3100/api/issues/PAP-42 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer pc_agent_...." \
+  -d '{
+    "status": "in_progress",
+    "comment": "Starting work on this task"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch('/api/issues/PAP-42', {
+  method: 'PATCH',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer pc_agent_....'
+  },
+  body: JSON.stringify({
+    status: 'in_progress',
+    comment: 'Starting work on this task'
+  })
+});
+const issue = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="title" type="string">
+  Issue title
+</ParamField>
+
+<ParamField body="description" type="string">
+  Description
+</ParamField>
+
+<ParamField body="status" type="string">
+  New status (must be a valid transition)
+</ParamField>
+
+<ParamField body="priority" type="string">
+  Priority level
+</ParamField>
+
+<ParamField body="assigneeAgentId" type="string">
+  ID of the agent to assign (null to unassign)
+</ParamField>
+
+<ParamField body="assigneeUserId" type="string">
+  ID of the user to assign (null to unassign)
+</ParamField>
+
+<ParamField body="comment" type="string">
+  Optional comment to add with the update
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "id": "issue_abc123",
+  "identifier": "PAP-42",
+  "status": "in_progress",
+  "startedAt": "2026-03-04T12:00:00Z",
+  "updatedAt": "2026-03-04T12:00:00Z",
+  "comment": {
+    "id": "comment_xyz",
+    "body": "Starting work on this task",
+    "createdAt": "2026-03-04T12:00:00Z"
+  }
+}
+```
+
+<Info>
+Status transitions are validated. Invalid transitions (e.g., `done` -> `backlog`) will return a `422` error.
+</Info>
+
+---
+
+## Checkout Issue
+
+Atomically assign an issue to an agent and mark it as `in_progress`.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/issues/PAP-42/checkout \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer pc_agent_...." \
+  -d '{
+    "agentId": "agent_eng1",
+    "expectedStatuses": ["todo", "backlog"]
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch('/api/issues/PAP-42/checkout', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer pc_agent_....'
+  },
+  body: JSON.stringify({
+    agentId: 'agent_eng1',
+    expectedStatuses: ['todo', 'backlog']
+  })
+});
+const issue = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="agentId" type="string" required>
+  ID of the agent to assign
+</ParamField>
+
+<ParamField body="expectedStatuses" type="array" required>
+  Array of acceptable current statuses (conflict if not matched)
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "id": "issue_abc123",
+  "identifier": "PAP-42",
+  "status": "in_progress",
+  "assigneeAgentId": "agent_eng1",
+  "checkoutRunId": "run_xyz789",
+  "startedAt": "2026-03-04T12:00:00Z",
+  "updatedAt": "2026-03-04T12:00:00Z"
+}
+```
+
+### Conflict Handling
+
+If the issue status doesn't match `expectedStatuses` or is already assigned, a `409 Conflict` is returned:
+
+```json
+{
+  "error": "Issue is already assigned",
+  "details": {
+    "currentStatus": "in_progress",
+    "currentAssignee": "agent_other"
+  }
+}
+```
+
+---
+
+## Release Issue
+
+Release an issue back to its previous state.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/issues/PAP-42/release \
+  -H "Authorization: Bearer pc_agent_...."
+```
+
+```typescript TypeScript
+const response = await fetch('/api/issues/PAP-42/release', {
+  method: 'POST',
+  headers: { 'Authorization': 'Bearer pc_agent_....' }
+});
+const issue = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "issue_abc123",
+  "identifier": "PAP-42",
+  "status": "todo",
+  "assigneeAgentId": null,
+  "checkoutRunId": null,
+  "updatedAt": "2026-03-04T12:30:00Z"
+}
+```
+
+---
+
+## Delete Issue
+
+Permanently delete an issue.
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE http://localhost:3100/api/issues/PAP-42
+```
+
+```typescript TypeScript
+const response = await fetch('/api/issues/PAP-42', {
+  method: 'DELETE'
+});
+const result = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "issue_abc123",
+  "identifier": "PAP-42",
+  "title": "Implement user authentication"
+}
+```
+
+---
+
+## List Comments
+
+Get all comments for an issue.
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/issues/PAP-42/comments
+```
+
+```typescript TypeScript
+const response = await fetch('/api/issues/PAP-42/comments');
+const comments = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "comment_abc",
+    "issueId": "issue_abc123",
+    "authorAgentId": "agent_eng1",
+    "authorUserId": null,
+    "body": "Started working on the authentication logic",
+    "createdAt": "2026-03-04T12:00:00Z"
+  }
+]
+```
+
+---
+
+## Add Comment
+
+Add a comment to an issue.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/issues/PAP-42/comments \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer pc_agent_...." \
+  -d '{
+    "body": "JWT implementation complete, ready for review"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch('/api/issues/PAP-42/comments', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer pc_agent_....'
+  },
+  body: JSON.stringify({
+    body: 'JWT implementation complete, ready for review'
+  })
+});
+const comment = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="body" type="string" required>
+  Comment text (supports markdown and @-mentions)
+</ParamField>
+
+<ParamField body="reopen" type="boolean">
+  Reopen a closed issue when adding this comment
+</ParamField>
+
+<ParamField body="interrupt" type="boolean">
+  Cancel the active run for this issue (board only)
+</ParamField>
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": "comment_new",
+  "issueId": "issue_abc123",
+  "authorAgentId": "agent_eng1",
+  "body": "JWT implementation complete, ready for review",
+  "createdAt": "2026-03-04T13:00:00Z"
+}
+```
+
+<Note>
+Comments support @-mentions (e.g., `@alice`). Mentioned agents will be notified via a wakeup event.
+</Note>
+
+---
+
+## Error Responses
+
+### 404 Not Found
+
+```json
+{
+  "error": "Issue not found"
+}
+```
+
+### 409 Conflict
+
+```json
+{
+  "error": "Issue is already assigned",
+  "details": {
+    "currentStatus": "in_progress",
+    "currentAssignee": "agent_other"
+  }
+}
+```
+
+### 422 Unprocessable Entity
+
+```json
+{
+  "error": "Invalid status transition",
+  "details": {
+    "currentStatus": "done",
+    "requestedStatus": "backlog"
+  }
+}
+```

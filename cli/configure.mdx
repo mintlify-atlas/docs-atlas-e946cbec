@@ -1,0 +1,831 @@
+---
+title: 'paperclipai configure'
+description: 'Update Paperclip configuration sections interactively'
+---
+
+## Overview
+
+The `configure` command allows you to update specific sections of your Paperclip configuration without going through the full onboarding process. It provides interactive prompts for each configuration area.
+
+## Syntax
+
+```bash
+paperclipai configure [options]
+```
+
+## Options
+
+### `--config <path>`
+Path to config file to update.
+
+**Default:** `~/.paperclip/instances/default/config.json`
+
+```bash
+paperclipai configure --config /etc/paperclip/config.json
+```
+
+### `--data-dir <path>`
+Paperclip data directory root.
+
+```bash
+paperclipai configure --data-dir /custom/data
+```
+
+### `--section <section>`
+Specific section to configure. Skip section selection menu.
+
+**Valid sections:**
+- `llm` - LLM Provider
+- `database` - Database
+- `logging` - Logging
+- `server` - Server
+- `storage` - Storage
+- `secrets` - Secrets
+
+```bash
+paperclipai configure --section llm
+```
+
+## Configuration Sections
+
+### LLM Provider
+
+Configure AI model provider for agents.
+
+**Options:**
+- **Provider:** `claude` or `openai`
+- **API Key:** Your provider API key
+- **Skip:** Remove LLM configuration entirely
+
+**Interactive prompts:**
+
+```
+◆  Configure LLM provider?
+│  ● Yes
+│  ○ No (remove existing LLM config)
+│
+◆  Select LLM provider
+│  ● claude
+│  ○ openai
+│
+◆  API key:
+│  sk-ant-***
+```
+
+**Example:**
+
+```bash
+paperclipai configure --section llm
+```
+
+**Resulting config:**
+
+```json
+{
+  "llm": {
+    "provider": "claude",
+    "apiKey": "sk-ant-***"
+  }
+}
+```
+
+<Note>
+API keys are stored in the config file. For production, consider using environment variables or secret management.
+</Note>
+
+### Database
+
+Configure database connection.
+
+**Database modes:**
+
+#### Embedded PostgreSQL
+
+Built-in PostgreSQL server (no external database required).
+
+**Options:**
+- **Data directory:** Where to store database files
+- **Port:** PostgreSQL listen port
+
+**Defaults:**
+- Data dir: `~/.paperclip/instances/default/db`
+- Port: `54329`
+
+**Interactive prompts:**
+
+```
+◆  Database mode
+│  ● embedded-postgres (Recommended for local development)
+│  ○ postgres (External PostgreSQL server)
+│
+◆  Embedded Postgres data directory:
+│  /home/user/.paperclip/instances/default/db
+│
+◆  Embedded Postgres port:
+│  54329
+```
+
+**Resulting config:**
+
+```json
+{
+  "database": {
+    "mode": "embedded-postgres",
+    "embeddedPostgresDataDir": "/home/user/.paperclip/instances/default/db",
+    "embeddedPostgresPort": 54329
+  }
+}
+```
+
+#### External PostgreSQL
+
+Connect to external PostgreSQL server.
+
+**Options:**
+- **Connection string:** Full PostgreSQL connection URL
+
+**Format:**
+```
+postgres://username:password@host:port/database
+```
+
+**Interactive prompts:**
+
+```
+◆  Database mode
+│  ○ embedded-postgres
+│  ● postgres
+│
+◆  PostgreSQL connection string:
+│  postgres://paperclip:***@db.example.com:5432/paperclip
+```
+
+**Resulting config:**
+
+```json
+{
+  "database": {
+    "mode": "postgres",
+    "connectionString": "postgres://paperclip:***@db.example.com:5432/paperclip"
+  }
+}
+```
+
+**Example:**
+
+```bash
+paperclipai configure --section database
+```
+
+<Warning>
+Changing database mode requires restarting the server and may require data migration.
+</Warning>
+
+### Logging
+
+Configure where and how logs are written.
+
+**Logging modes:**
+
+#### File Logging
+
+Write logs to files on disk.
+
+**Options:**
+- **Log directory:** Where to store log files
+
+**Default:** `~/.paperclip/instances/default/logs`
+
+**Interactive prompts:**
+
+```
+◆  Logging mode
+│  ● file (Write logs to files)
+│  ○ console (Output to stdout/stderr)
+│
+◆  Log directory:
+│  /home/user/.paperclip/instances/default/logs
+```
+
+**Resulting config:**
+
+```json
+{
+  "logging": {
+    "mode": "file",
+    "logDir": "/home/user/.paperclip/instances/default/logs"
+  }
+}
+```
+
+#### Console Logging
+
+Output logs to stdout/stderr (useful for Docker/systemd).
+
+**Interactive prompts:**
+
+```
+◆  Logging mode
+│  ○ file
+│  ● console
+```
+
+**Resulting config:**
+
+```json
+{
+  "logging": {
+    "mode": "console"
+  }
+}
+```
+
+**Example:**
+
+```bash
+paperclipai configure --section logging
+```
+
+### Server
+
+Configure server network and authentication settings.
+
+**Options:**
+
+#### Deployment Mode
+
+**local_trusted:**
+- No authentication required
+- Recommended for local development
+- All requests trusted
+
+**authenticated:**
+- Full authentication required
+- Recommended for production
+- Requires user login
+
+#### Exposure
+
+**private:**
+- Only allowed hostnames can connect
+- Requires `allowedHostnames` configuration
+- Most secure
+
+**public:**
+- Open access (within deployment mode constraints)
+- Use with caution
+
+#### Network Settings
+
+**Host:**
+- `127.0.0.1` - Localhost only (most secure)
+- `0.0.0.0` - All interfaces (network accessible)
+- Specific IP - Bind to specific interface
+
+**Port:**
+- Default: `3100`
+- Any available port
+
+#### Additional Settings
+
+**Serve UI:**
+- `true` - Serve web UI from API server
+- `false` - API only (UI hosted separately)
+
+**Allowed Hostnames:**
+- List of hostnames allowed to connect (for authenticated/private mode)
+- Example: `["alice-laptop", "bob-desktop"]`
+
+**Interactive prompts:**
+
+```
+◆  Deployment mode
+│  ● local_trusted (No authentication, for local development)
+│  ○ authenticated (Full authentication required)
+│
+◆  Exposure
+│  ● private (Only allowed hostnames)
+│  ○ public (Open access)
+│
+◆  Host to bind:
+│  127.0.0.1
+│
+◆  Port:
+│  3100
+│
+◆  Serve UI from this server?
+│  ● Yes
+│  ○ No
+│
+◆  Add allowed hostnames? (for authenticated/private mode)
+│  
+```
+
+**Resulting config:**
+
+```json
+{
+  "server": {
+    "deploymentMode": "local_trusted",
+    "exposure": "private",
+    "host": "127.0.0.1",
+    "port": 3100,
+    "allowedHostnames": [],
+    "serveUi": true
+  },
+  "auth": {
+    "baseUrlMode": "auto"
+  }
+}
+```
+
+**Example:**
+
+```bash
+paperclipai configure --section server
+```
+
+<Warning>
+**Security:** Use `authenticated` mode and `private` exposure for production deployments.
+</Warning>
+
+### Storage
+
+Configure file storage backend.
+
+**Storage providers:**
+
+#### Local Disk
+
+Store files on local filesystem.
+
+**Options:**
+- **Base directory:** Where to store files
+
+**Default:** `~/.paperclip/instances/default/data/storage`
+
+**Interactive prompts:**
+
+```
+◆  Storage provider
+│  ● local_disk (Store files on local filesystem)
+│  ○ s3 (Use S3 or S3-compatible storage)
+│
+◆  Base directory for local storage:
+│  /home/user/.paperclip/instances/default/data/storage
+```
+
+**Resulting config:**
+
+```json
+{
+  "storage": {
+    "provider": "local_disk",
+    "localDisk": {
+      "baseDir": "/home/user/.paperclip/instances/default/data/storage"
+    }
+  }
+}
+```
+
+#### S3 Storage
+
+Use AWS S3 or S3-compatible storage (MinIO, DigitalOcean Spaces, etc.).
+
+**Options:**
+- **Bucket:** S3 bucket name
+- **Region:** AWS region (e.g., `us-east-1`)
+- **Endpoint:** Custom endpoint for S3-compatible services (optional)
+- **Prefix:** Object key prefix (optional)
+- **Force path style:** Enable for non-AWS S3 providers
+
+**Interactive prompts:**
+
+```
+◆  Storage provider
+│  ○ local_disk
+│  ● s3
+│
+◆  S3 bucket name:
+│  my-paperclip-bucket
+│
+◆  S3 region:
+│  us-east-1
+│
+◆  S3 endpoint (optional, for S3-compatible providers):
+│  https://nyc3.digitaloceanspaces.com
+│
+◆  S3 object key prefix (optional):
+│  paperclip/
+│
+◆  Force path-style URLs? (required for some S3-compatible providers)
+│  ● Yes
+│  ○ No
+```
+
+**Resulting config:**
+
+```json
+{
+  "storage": {
+    "provider": "s3",
+    "s3": {
+      "bucket": "my-paperclip-bucket",
+      "region": "us-east-1",
+      "endpoint": "https://nyc3.digitaloceanspaces.com",
+      "prefix": "paperclip/",
+      "forcePathStyle": true
+    }
+  }
+}
+```
+
+<Note>
+S3 credentials are read from environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) or IAM roles.
+</Note>
+
+**Example:**
+
+```bash
+paperclipai configure --section storage
+```
+
+### Secrets
+
+Configure secrets management and encryption.
+
+**Options:**
+
+**Provider:** (Currently only `local_encrypted` supported)
+- Encrypts secrets with a master key
+- Stores encrypted values in database
+
+**Strict Mode:**
+- `true` - Require secret references for sensitive environment keys
+- `false` - Allow plain text values
+
+**Key File Path:**
+- Path to master encryption key
+- Auto-generated if missing
+
+**Default:** `~/.paperclip/instances/default/secrets/master.key`
+
+**Interactive prompts:**
+
+```
+◆  Secrets strict mode (require secret refs for sensitive env keys)?
+│  ○ Yes
+│  ● No
+│
+◆  Secrets key file path:
+│  /home/user/.paperclip/instances/default/secrets/master.key
+```
+
+**Resulting config:**
+
+```json
+{
+  "secrets": {
+    "provider": "local_encrypted",
+    "strictMode": false,
+    "localEncrypted": {
+      "keyFilePath": "/home/user/.paperclip/instances/default/secrets/master.key"
+    }
+  }
+}
+```
+
+**Key file creation:**
+
+If the key file doesn't exist:
+
+```
+✔  Created local secrets key file at /home/user/.paperclip/instances/default/secrets/master.key
+```
+
+**Example:**
+
+```bash
+paperclipai configure --section secrets
+```
+
+<Warning>
+**Backup your master key!** Without it, encrypted secrets cannot be decrypted.
+</Warning>
+
+## Interactive Workflow
+
+### Without `--section`
+
+Shows section selection menu:
+
+```
+┌  paperclip configure
+│
+◆  Which section do you want to configure?
+│  ○ LLM Provider
+│  ○ Database
+│  ○ Logging
+│  ● Server
+│  ○ Storage
+│  ○ Secrets
+│
+```
+
+After configuring:
+
+```
+✔  Server configuration updated.
+│
+◆  Configure another section?
+│  ● Yes
+│  ○ No
+│
+└  Configuration saved.
+```
+
+### With `--section`
+
+Directly configures specified section:
+
+```bash
+paperclipai configure --section llm
+```
+
+```
+┌  paperclip configure
+│
+▲  LLM Provider
+│
+◆  Configure LLM provider?
+  ...
+│
+✔  LLM Provider configuration updated.
+│
+└  Configuration saved.
+```
+
+No "configure another section" prompt - exits after updating.
+
+## Examples
+
+### Update LLM provider
+
+```bash
+paperclipai configure --section llm
+```
+
+### Switch to external database
+
+```bash
+paperclipai configure --section database
+# Select: postgres
+# Enter connection string
+```
+
+### Change server port
+
+```bash
+paperclipai configure --section server
+# Update port to 8080
+```
+
+### Switch to S3 storage
+
+```bash
+paperclipai configure --section storage
+# Select: s3
+# Enter bucket, region, etc.
+```
+
+### Enable strict secrets mode
+
+```bash
+paperclipai configure --section secrets
+# Enable strict mode
+```
+
+### Interactive multi-section update
+
+```bash
+paperclipai configure
+# Select sections one by one
+# Configure multiple sections in one session
+```
+
+### Custom config location
+
+```bash
+paperclipai configure --config /etc/paperclip/prod.json --section database
+```
+
+## Configuration Updates
+
+Each update:
+
+1. Reads existing config
+2. Shows current values (where applicable)
+3. Prompts for new values
+4. Writes updated config
+5. Updates `$meta.updatedAt` and `$meta.source`
+
+**Metadata:**
+
+```json
+{
+  "$meta": {
+    "version": 1,
+    "updatedAt": "2026-03-04T23:15:30.000Z",
+    "source": "configure"
+  }
+}
+```
+
+## Validations
+
+### Config File Must Exist
+
+If no config found:
+
+```
+✖  No config file found. Run `paperclipai onboard` first.
+```
+
+**Solution:**
+
+```bash
+paperclipai onboard
+paperclipai configure
+```
+
+### Invalid Section Name
+
+If using unknown section:
+
+```bash
+paperclipai configure --section invalid
+```
+
+```
+✖  Unknown section: invalid. Choose from: llm, database, logging, server, storage, secrets
+```
+
+### Invalid Config File
+
+If existing config is corrupted:
+
+```
+⚠  Existing config is invalid. Loading defaults so you can repair it now.
+   <error details>
+```
+
+You can proceed to fix the configuration.
+
+## After Configuration
+
+### Verify Changes
+
+Check updated config:
+
+```bash
+cat ~/.paperclip/instances/default/config.json
+```
+
+Or view environment:
+
+```bash
+paperclipai env
+```
+
+### Test Configuration
+
+Run health checks:
+
+```bash
+paperclipai doctor --repair
+```
+
+### Restart Server
+
+Configuration changes require restart:
+
+```bash
+# Stop current server (Ctrl+C)
+# Restart with new config
+paperclipai run
+```
+
+<Note>
+Most configuration changes require a server restart to take effect.
+</Note>
+
+## Troubleshooting
+
+### Permission denied writing config
+
+**Check file permissions:**
+
+```bash
+ls -la ~/.paperclip/instances/default/config.json
+```
+
+**Fix ownership:**
+
+```bash
+sudo chown $USER:$USER ~/.paperclip/instances/default/config.json
+```
+
+### Changes not taking effect
+
+Ensure server is restarted:
+
+```bash
+# Stop server
+pkill -f paperclipai
+
+# Restart
+paperclipai run
+```
+
+### Lost configuration
+
+Config files are not backed up automatically. To restore:
+
+```bash
+# Re-run onboard
+paperclipai onboard
+
+# Or manually recreate
+paperclipai configure
+```
+
+### Invalid database connection
+
+Test connection separately:
+
+```bash
+# For postgres mode
+psql "postgres://user:pass@host:5432/db"
+
+# Update if needed
+paperclipai configure --section database
+```
+
+## Best Practices
+
+### Backup Before Changes
+
+```bash
+cp ~/.paperclip/instances/default/config.json ~/.paperclip/instances/default/config.json.backup
+paperclipai configure --section database
+```
+
+### Use Version Control
+
+For production configs:
+
+```bash
+cd /etc/paperclip
+git init
+git add config.json
+git commit -m "Initial config"
+
+# After changes
+paperclipai configure --config /etc/paperclip/config.json
+git diff config.json
+git commit -am "Update database config"
+```
+
+### Test in Staging First
+
+```bash
+# Staging
+paperclipai configure --config staging.json --section database
+paperclipai doctor --config staging.json
+paperclipai run --config staging.json
+
+# If successful, apply to production
+cp staging.json production.json
+```
+
+### Document Changes
+
+Keep a changelog:
+
+```bash
+echo "$(date): Changed database to external postgres" >> /etc/paperclip/CHANGELOG
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Verify configuration" icon="stethoscope" href="/cli/doctor">
+    Run health checks after configuration changes
+  </Card>
+  <Card title="Restart server" icon="play" href="/cli/run">
+    Apply configuration changes
+  </Card>
+  <Card title="Environment variables" icon="terminal" href="/cli/overview">
+    See CLI environment variables
+  </Card>
+</CardGroup>

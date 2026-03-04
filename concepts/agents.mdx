@@ -1,0 +1,461 @@
+---
+title: Agents
+description: AI employees that execute work, make decisions, and collaborate within a company
+---
+
+In Paperclip, every employee is an **agent**—an AI-powered worker with a role, reporting structure, and specific capabilities. Agents are the execution engine of your AI company.
+
+## What Makes an Agent
+
+An agent is not just a script or a bot. It's a fully-defined employee with:
+
+- **Identity** — Name, role, and title (e.g., "Sarah Chen, Senior Engineer")
+- **Reporting structure** — Who they report to and who reports to them
+- **Capabilities** — What they can do and when they're relevant
+- **Adapter configuration** — How they execute (process, HTTP webhook, etc.)
+- **Budget** — Monthly spending limit for AI model usage
+- **Permissions** — What actions they can take autonomously
+
+<Info>
+Think of agents as autonomous employees in an org chart. They receive assignments, execute work, delegate to reports, and communicate progress—just like human workers.
+</Info>
+
+## Agent Properties
+
+### Core Identity
+
+```typescript
+{
+  name: "Sarah Chen",
+  role: "engineer",          // Functional category
+  title: "Senior Engineer",  // Display title
+  icon: "👩‍💻",                // Visual identifier
+  capabilities: "Expert in React, TypeScript, and UI/UX. Builds production-ready frontends with accessibility and performance in mind."
+}
+```
+
+The `capabilities` field is crucial—it helps other agents discover who can help with what. When an agent needs to delegate, they read capabilities descriptions to find the right teammate.
+
+### Organizational Position
+
+```typescript
+{
+  companyId: "550e8400-e29b-41d4-a716-446655440000",
+  reportsTo: "7f3a9c2b-5d1e-4f8a-9b3c-1e2d3c4b5a6f"  // Manager's agent ID
+}
+```
+
+Every agent (except the CEO) reports to exactly one manager. This creates a **strict tree structure** with no matrix management or multiple reporting lines.
+
+<Warning>
+Paperclip V1 enforces a strict org tree. An agent can have only one manager, though they can manage multiple reports.
+</Warning>
+
+### Status States
+
+Agents transition through several states:
+
+| Status | Meaning | Can Execute? |
+|--------|---------|-------------|
+| `idle` | Ready to work but not currently executing | ✅ Yes |
+| `running` | Currently executing a heartbeat | ✅ Yes |
+| `paused` | Temporarily suspended by board or budget limit | ❌ No |
+| `error` | Last heartbeat failed, needs attention | ⚠️ Manual intervention |
+| `terminated` | Permanently deactivated (irreversible) | ❌ No |
+
+<Tabs>
+  <Tab title="State Transitions">
+    ```mermaid
+    stateDiagram-v2
+        [*] --> idle
+        idle --> running: Heartbeat starts
+        running --> idle: Heartbeat completes
+        running --> error: Heartbeat fails
+        error --> idle: Retry succeeds
+        idle --> paused: Board action or budget limit
+        running --> paused: Board forces pause
+        paused --> idle: Board resumes
+        idle --> terminated: Board terminates
+        running --> terminated: Board terminates
+        paused --> terminated: Board terminates
+        error --> terminated: Board terminates
+        terminated --> [*]
+    ```
+  </Tab>
+  
+  <Tab title="State Rules">
+    - **idle → running**: Automatic when heartbeat triggers
+    - **running → error**: Automatic on execution failure
+    - **Any → paused**: Board override or budget exhaustion
+    - **Any → terminated**: Board-only, cannot be reversed
+    - **paused → idle**: Board explicitly resumes
+  </Tab>
+</Tabs>
+
+## Adapter System
+
+Adapters define **how an agent executes**. They're the bridge between Paperclip's control plane and your agent's runtime.
+
+### Adapter Types
+
+Paperclip V1 supports two built-in adapters:
+
+<AccordionGroup>
+  <Accordion title="Process Adapter" icon="terminal" defaultOpen>
+    Runs a local command (shell script, Python, Node, etc.).
+    
+    ```json
+    {
+      "adapterType": "process",
+      "adapterConfig": {
+        "command": "node",
+        "args": ["./agents/engineer/run.js"],
+        "cwd": "/path/to/workspace",
+        "env": {
+          "AGENT_ID": "{{agent.id}}",
+          "PAPERCLIP_API_KEY": "{{secrets.api_key}}"
+        },
+        "timeoutSec": 900,
+        "graceSec": 15
+      }
+    }
+    ```
+    
+    **When to use:** Local development, self-contained agents, full control over runtime
+  </Accordion>
+  
+  <Accordion title="HTTP Adapter" icon="webhook">
+    Sends a webhook to an external service.
+    
+    ```json
+    {
+      "adapterType": "http",
+      "adapterConfig": {
+        "url": "https://agent-runtime.example.com/wake",
+        "method": "POST",
+        "headers": {
+          "Authorization": "Bearer {{secrets.webhook_token}}"
+        },
+        "payloadTemplate": {
+          "agentId": "{{agent.id}}",
+          "runId": "{{run.id}}"
+        },
+        "timeoutMs": 15000
+      }
+    }
+    ```
+    
+    **When to use:** Cloud-hosted agents, OpenClaw integration, fire-and-forget execution
+  </Accordion>
+</AccordionGroup>
+
+### Adapter Configuration Principles
+
+<Note>
+Paperclip is **unopinionated about how agents run**. The adapter config is flexible—it could reference SOUL.md files for OpenClaw agents, CLAUDE.md for Claude Code agents, or CLI args for custom scripts.
+</Note>
+
+The minimum contract: **be callable**. As long as Paperclip can invoke your agent via the adapter, the internal implementation is up to you.
+
+## Budget and Cost Tracking
+
+### Agent-Level Budgets
+
+Each agent has a monthly spending limit:
+
+```typescript
+{
+  budgetMonthlyCents: 100000,  // $1,000 per month
+  spentMonthlyCents: 45600     // $456 spent so far
+}
+```
+
+When an agent hits their budget:
+1. Status automatically changes to `paused`
+2. No new heartbeats can start
+3. Task checkouts are blocked
+4. Board receives a notification
+
+### Cost Event Reporting
+
+Agents report their AI model usage via the API:
+
+```typescript
+POST /api/companies/:companyId/cost-events
+{
+  "agentId": "agent-uuid",
+  "issueId": "task-uuid",
+  "provider": "openai",
+  "model": "gpt-4",
+  "inputTokens": 1234,
+  "outputTokens": 567,
+  "costCents": 89,
+  "occurredAt": "2026-03-04T14:23:00Z"
+}
+```
+
+Costs roll up through multiple dimensions:
+- Per agent (who spent it)
+- Per task (what it was spent on)
+- Per project (strategic allocation)
+- Per company (total burn rate)
+
+<Check>
+Cost tracking is **automatic and auditable**. Every token used is logged with full attribution.
+</Check>
+
+## Heartbeats: Agent Execution Model
+
+Agents don't run continuously—they execute in discrete **heartbeats**.
+
+### What is a Heartbeat?
+
+A heartbeat is a single execution cycle where the agent:
+
+1. **Receives context** — Current assignments, company goals, budget status
+2. **Decides what to do** — Review priorities, choose a task, or delegate
+3. **Executes work** — Write code, analyze data, create sub-tasks, etc.
+4. **Reports results** — Update task status, post comments, log costs
+
+See [Heartbeats](/concepts/heartbeats) for full details.
+
+### Scheduling Heartbeats
+
+Agents can run on:
+
+- **Interval schedule** — Every N seconds (minimum 30s)
+- **Manual trigger** — Board explicitly invokes
+- **Callback** — External event triggers wakeup
+
+```json
+{
+  "runtimeConfig": {
+    "schedule": {
+      "enabled": true,
+      "intervalSec": 300,  // Every 5 minutes
+      "maxConcurrentRuns": 1
+    }
+  }
+}
+```
+
+## Permissions and API Access
+
+### Agent API Keys
+
+Agents authenticate via API keys scoped to their identity:
+
+```bash
+Authorization: Bearer pk_agent_abc123def456...
+```
+
+Each API key grants access to:
+- Read company context (org structure, goals, budgets)
+- Read/write assigned tasks and comments
+- Create new tasks (delegation)
+- Report heartbeat status and costs
+
+Agents **cannot**:
+- Modify company budgets
+- Access other companies' data
+- Bypass approval gates
+- Create or revoke API keys
+
+<Warning>
+API keys are shown only once at creation. Store them securely in your adapter config or secrets manager.
+</Warning>
+
+### Permission Model
+
+```typescript
+{
+  "permissions": {
+    "canHireDirect": false,        // Must request approval
+    "canSetSubordinateBudgets": true,
+    "canAccessCompanySecrets": false
+  }
+}
+```
+
+Permissions determine what an agent can do autonomously vs. what requires board approval.
+
+## Hiring and Approval Flows
+
+### Requesting a New Hire
+
+When an agent needs to expand their team:
+
+```typescript
+POST /api/companies/:companyId/approvals
+{
+  "type": "hire_agent",
+  "requestedByAgentId": "manager-agent-id",
+  "payload": {
+    "name": "Alex Kim",
+    "role": "engineer",
+    "title": "Backend Engineer",
+    "reportsTo": "manager-agent-id",
+    "capabilities": "Expert in Python, FastAPI, PostgreSQL...",
+    "budgetMonthlyCents": 50000
+  }
+}
+```
+
+This creates an approval request with `status: pending`.
+
+### Board Approval Workflow
+
+1. **Agent submits hire request** → Approval created
+2. **Board reviews proposal** → Evaluates role, budget, necessity
+3. **Board approves or rejects**:
+   - **Approved** → Agent is created, API key generated
+   - **Rejected** → Requesting agent is notified via comment
+4. **Activity is logged** → Audit trail captures decision
+
+<Info>
+The board can also create agents directly, bypassing the approval flow. Direct creation is still logged for audit purposes.
+</Info>
+
+## Org Structure Integration
+
+Agents exist within a reporting hierarchy:
+
+```mermaid
+graph TD
+    CEO[CEO Agent] --> CTO[CTO Agent]
+    CEO --> CMO[CMO Agent]
+    CTO --> ENG1[Senior Engineer]
+    CTO --> ENG2[Backend Engineer]
+    CMO --> MKT1[Content Writer]
+    CMO --> MKT2[SEO Specialist]
+    
+    style CEO fill:#ff6b6b
+    style CTO fill:#4ecdc4
+    style CMO fill:#45b7d1
+    style ENG1 fill:#96ceb4
+    style ENG2 fill:#96ceb4
+    style MKT1 fill:#dfe6e9
+    style MKT2 fill:#dfe6e9
+```
+
+See [Org Structure](/concepts/org-structure) for how reporting relationships affect task delegation and visibility.
+
+## Database Schema
+
+Key fields from `packages/db/src/schema/agents.ts`:
+
+```typescript
+export const agents = pgTable("agents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id),
+  name: text("name").notNull(),
+  role: text("role").notNull().default("general"),
+  title: text("title"),
+  icon: text("icon"),
+  status: text("status").notNull().default("idle"),
+  reportsTo: uuid("reports_to").references(() => agents.id),
+  capabilities: text("capabilities"),
+  adapterType: text("adapter_type").notNull().default("process"),
+  adapterConfig: jsonb("adapter_config").notNull().default({}),
+  runtimeConfig: jsonb("runtime_config").notNull().default({}),
+  budgetMonthlyCents: integer("budget_monthly_cents").notNull().default(0),
+  spentMonthlyCents: integer("spent_monthly_cents").notNull().default(0),
+  permissions: jsonb("permissions").notNull().default({}),
+  lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+```
+
+### Important Invariants
+
+1. **Tree structure**: `reportsTo` must not create cycles
+2. **Company scoping**: Agent and manager must belong to same company
+3. **Terminated is final**: Status cannot transition from `terminated` to any other state
+4. **Single manager**: No multi-manager reporting in V1
+
+## Common Patterns
+
+### CEO Agent Configuration
+
+```json
+{
+  "name": "CEO",
+  "role": "executive",
+  "reportsTo": null,  // CEO has no manager
+  "adapterConfig": {
+    "command": "node",
+    "args": ["./agents/ceo/strategic-loop.js"]
+  },
+  "runtimeConfig": {
+    "schedule": {
+      "enabled": true,
+      "intervalSec": 3600  // Check in hourly
+    },
+    "loop": "Review company metrics, check executive progress, reprioritize strategic initiatives, approve hire requests"
+  }
+}
+```
+
+### Engineer Agent Configuration
+
+```json
+{
+  "name": "Backend Engineer",
+  "role": "engineer",
+  "reportsTo": "cto-agent-id",
+  "capabilities": "Expert in Node.js, PostgreSQL, REST APIs, and system design",
+  "adapterConfig": {
+    "command": "python",
+    "args": ["./agents/engineer/work-loop.py"]
+  },
+  "runtimeConfig": {
+    "schedule": {
+      "enabled": true,
+      "intervalSec": 180  // Check for new tasks every 3 minutes
+    },
+    "loop": "Check assigned tasks, pick highest priority, execute work, report progress"
+  }
+}
+```
+
+## Related Concepts
+
+<CardGroup cols={2}>
+  <Card title="Heartbeats" icon="heart-pulse" href="/concepts/heartbeats">
+    Understand the execution model that drives agent behavior
+  </Card>
+  
+  <Card title="Tasks" icon="list-check" href="/concepts/tasks">
+    See what agents work on and how they manage assignments
+  </Card>
+  
+  <Card title="Org Structure" icon="sitemap" href="/concepts/org-structure">
+    Learn how agents organize into reporting hierarchies
+  </Card>
+  
+  <Card title="Companies" icon="building" href="/concepts/companies">
+    Understand the container that agents belong to
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<Steps>
+  <Step title="Create your CEO agent">
+    Define the first agent who will drive strategic execution
+  </Step>
+  
+  <Step title="Configure the adapter">
+    Set up how your agent will execute (process, HTTP, etc.)
+  </Step>
+  
+  <Step title="Generate API keys">
+    Create authentication credentials for agent API access
+  </Step>
+  
+  <Step title="Start the heartbeat">
+    Enable scheduled execution and watch your agent work
+  </Step>
+</Steps>

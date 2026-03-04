@@ -1,0 +1,414 @@
+---
+title: Production Deployment
+description: Deploy Paperclip to production with proper security and scalability
+---
+
+Deploy Paperclip to production with authentication, hosted PostgreSQL, and proper security hardening.
+
+## Production Checklist
+
+Before deploying to production:
+
+<Steps>
+  <Step title="Choose deployment mode">
+    Configure `authenticated` mode with `public` exposure for internet-facing deployments.
+  </Step>
+  <Step title="Set up hosted database">
+    Use a managed PostgreSQL service (Supabase, AWS RDS, etc.).
+  </Step>
+  <Step title="Configure authentication">
+    Set explicit public base URL and configure Better Auth.
+  </Step>
+  <Step title="Enable secrets strict mode">
+    Prevent inline secrets in environment variables.
+  </Step>
+  <Step title="Set up storage">
+    Use S3-compatible storage for production file uploads.
+  </Step>
+  <Step title="Configure logging and monitoring">
+    Set up log aggregation and health check monitoring.
+  </Step>
+  <Step title="Run security validation">
+    Use `pnpm paperclipai doctor` to validate configuration.
+  </Step>
+</Steps>
+
+## Deployment Modes
+
+Paperclip supports two deployment modes:
+
+### local_trusted
+
+**For:** Local development, single-operator workflows
+
+- No login required
+- Localhost-only binding
+- Company deletion enabled
+- Fastest startup
+
+### authenticated
+
+**For:** Production, multi-user, internet-facing deployments
+
+Two exposure policies:
+
+#### Private Exposure
+
+**For:** Private network access (VPN, Tailscale, LAN)
+
+- Login required
+- Auto URL detection
+- Lower friction setup
+- Private-host trust policy
+
+#### Public Exposure
+
+**For:** Internet-facing deployments
+
+- Login required
+- Explicit public URL required
+- Stricter deployment checks
+- Enhanced security validation
+
+## Configuration
+
+### Interactive Setup
+
+Run the onboarding wizard:
+
+```bash
+pnpm paperclipai onboard
+```
+
+You'll be prompted for:
+1. Deployment mode (`local_trusted` or `authenticated`)
+2. Exposure policy (if `authenticated`): `private` or `public`
+3. Public base URL (if `authenticated + public`)
+
+### Environment Variables
+
+For automated deployments, use environment variables:
+
+```bash
+# Deployment mode
+PAPERCLIP_DEPLOYMENT_MODE=authenticated
+PAPERCLIP_DEPLOYMENT_EXPOSURE=public
+
+# Authentication
+PAPERCLIP_AUTH_PUBLIC_BASE_URL=https://paperclip.example.com
+PAPERCLIP_AUTH_BASE_URL_MODE=explicit
+
+# Server
+HOST=0.0.0.0
+PORT=3100
+
+# Database
+DATABASE_URL=postgres://user:pass@host:6543/paperclip
+
+# Secrets
+PAPERCLIP_SECRETS_STRICT_MODE=true
+PAPERCLIP_SECRETS_PROVIDER=local_encrypted
+PAPERCLIP_SECRETS_MASTER_KEY_FILE=/app/secrets/master.key
+
+# Storage
+PAPERCLIP_STORAGE_PROVIDER=s3
+PAPERCLIP_STORAGE_S3_BUCKET=paperclip-uploads
+PAPERCLIP_STORAGE_S3_REGION=us-east-1
+
+# Features
+PAPERCLIP_ENABLE_COMPANY_DELETION=false
+HEARTBEAT_SCHEDULER_ENABLED=true
+```
+
+## Hosted Database Setup
+
+### Supabase
+
+1. Create a project at [database.new](https://database.new)
+2. Get connection string from **Project Settings > Database > Connection string**
+3. Use connection pooling (port 6543) for the application:
+
+```bash
+DATABASE_URL=postgres://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
+```
+
+4. Update `packages/db/src/client.ts` to disable prepared statements:
+
+```typescript
+export function createDb(url: string) {
+  const sql = postgres(url, { prepare: false });
+  return drizzlePg(sql, { schema });
+}
+```
+
+5. Push schema using direct connection (port 5432):
+
+```bash
+DATABASE_URL=postgres://postgres.[PROJECT-REF]:[PASSWORD]@...5432/postgres \
+  npx drizzle-kit push
+```
+
+### AWS RDS
+
+1. Create PostgreSQL 17 instance
+2. Configure security groups for your deployment
+3. Set connection string:
+
+```bash
+DATABASE_URL=postgres://username:password@your-rds-instance.region.rds.amazonaws.com:5432/paperclip
+```
+
+### Other Providers
+
+Any PostgreSQL 17+ provider works:
+- Google Cloud SQL
+- Azure Database for PostgreSQL
+- DigitalOcean Managed Databases
+- Neon
+- Railway
+
+## Storage Configuration
+
+### S3-Compatible Storage
+
+For production, use S3 or compatible services:
+
+```bash
+PAPERCLIP_STORAGE_PROVIDER=s3
+PAPERCLIP_STORAGE_S3_BUCKET=paperclip-uploads
+PAPERCLIP_STORAGE_S3_REGION=us-east-1
+PAPERCLIP_STORAGE_S3_PREFIX=prod/
+
+# AWS credentials via environment
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+
+# Or use IAM roles (recommended)
+```
+
+### MinIO or Custom S3 Endpoint
+
+```bash
+PAPERCLIP_STORAGE_S3_ENDPOINT=https://minio.example.com
+PAPERCLIP_STORAGE_S3_FORCE_PATH_STYLE=true
+```
+
+## Authentication Setup
+
+Paperclip uses [Better Auth](https://better-auth.com) for session management.
+
+### Set Public Base URL
+
+```bash
+# Explicitly set your public URL
+PAPERCLIP_AUTH_PUBLIC_BASE_URL=https://paperclip.example.com
+PAPERCLIP_AUTH_BASE_URL_MODE=explicit
+```
+
+### Bootstrap Admin User
+
+On first deployment in `authenticated` mode, the system creates a board claim URL. Check startup logs:
+
+```
+⚠️  Board claim URL: https://paperclip.example.com/board-claim/<token>?code=<code>
+```
+
+1. Sign in as a regular user
+2. Visit the claim URL
+3. You're promoted to instance admin
+
+### Allowed Hostnames
+
+For multi-domain deployments:
+
+```bash
+PAPERCLIP_ALLOWED_HOSTNAMES=paperclip.example.com,app.example.com
+```
+
+## Logging and Monitoring
+
+### Application Logs
+
+Logs are written to:
+- **Console**: INFO level and above (JSON format in production)
+- **File**: `.paperclip/logs/server.log` (DEBUG level)
+
+Log configuration in `server/src/middleware/logger.ts:1`.
+
+### Health Checks
+
+Monitor `/api/health` endpoint:
+
+```bash
+curl https://paperclip.example.com/api/health
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "deployment": {
+    "mode": "authenticated",
+    "exposure": "public",
+    "authReady": true
+  }
+}
+```
+
+### Heartbeat Monitoring
+
+Heartbeat scheduler runs every 30 seconds by default:
+
+```bash
+# Disable heartbeats (not recommended in production)
+HEARTBEAT_SCHEDULER_ENABLED=false
+
+# Adjust interval (milliseconds)
+HEARTBEAT_SCHEDULER_INTERVAL_MS=60000
+```
+
+## Docker Production Deployment
+
+### Build Production Image
+
+```bash
+docker build -t paperclip:latest .
+```
+
+### Run with Production Config
+
+```bash
+docker run -d \
+  --name paperclip \
+  -p 3100:3100 \
+  -e DATABASE_URL=postgres://... \
+  -e PAPERCLIP_DEPLOYMENT_MODE=authenticated \
+  -e PAPERCLIP_DEPLOYMENT_EXPOSURE=public \
+  -e PAPERCLIP_AUTH_PUBLIC_BASE_URL=https://paperclip.example.com \
+  -e PAPERCLIP_SECRETS_STRICT_MODE=true \
+  -e PAPERCLIP_STORAGE_PROVIDER=s3 \
+  -e PAPERCLIP_STORAGE_S3_BUCKET=paperclip-uploads \
+  -e AWS_ACCESS_KEY_ID=... \
+  -e AWS_SECRET_ACCESS_KEY=... \
+  -v /app/data/secrets:/paperclip/secrets \
+  paperclip:latest
+```
+
+### Docker Compose Production
+
+```yaml
+version: '3.8'
+services:
+  paperclip:
+    build: .
+    ports:
+      - "3100:3100"
+    environment:
+      DATABASE_URL: postgres://user:pass@db:5432/paperclip
+      PAPERCLIP_DEPLOYMENT_MODE: authenticated
+      PAPERCLIP_DEPLOYMENT_EXPOSURE: public
+      PAPERCLIP_AUTH_PUBLIC_BASE_URL: https://paperclip.example.com
+      PAPERCLIP_SECRETS_STRICT_MODE: "true"
+      PAPERCLIP_STORAGE_PROVIDER: s3
+      PAPERCLIP_STORAGE_S3_BUCKET: paperclip-uploads
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - secrets:/paperclip/secrets
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: paperclip
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: paperclip
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  secrets:
+```
+
+## Validation
+
+Run the doctor command to validate production setup:
+
+```bash
+pnpm paperclipai doctor
+```
+
+This checks:
+- Deployment mode configuration
+- Database connectivity
+- Secret provider setup
+- Storage provider configuration
+- Authentication readiness
+
+Use `--repair` to auto-fix issues:
+
+```bash
+pnpm paperclipai doctor --repair
+```
+
+## Platform-Specific Guides
+
+<CardGroup cols={2}>
+  <Card title="Railway" icon="train">
+    Click Deploy: Configure DATABASE_URL from Railway Postgres plugin
+  </Card>
+  <Card title="Render" icon="server">
+    Web Service + Postgres: Set environment variables in dashboard
+  </Card>
+  <Card title="Fly.io" icon="plane">
+    Use fly.toml: Attach Postgres, configure secrets
+  </Card>
+  <Card title="AWS ECS" icon="aws">
+    Task definition: Use RDS for database, S3 for storage
+  </Card>
+</CardGroup>
+
+## Security Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use strict secrets mode">
+    Always enable in production:
+    ```bash
+    PAPERCLIP_SECRETS_STRICT_MODE=true
+    ```
+  </Accordion>
+  
+  <Accordion title="Disable company deletion">
+    Prevent accidental data loss:
+    ```bash
+    PAPERCLIP_ENABLE_COMPANY_DELETION=false
+    ```
+  </Accordion>
+  
+  <Accordion title="Use connection pooling">
+    For hosted databases, use pooled connections (e.g., Supabase port 6543)
+  </Accordion>
+  
+  <Accordion title="Rotate secrets master key">
+    Store master key in a secure vault, not in environment variables
+  </Accordion>
+  
+  <Accordion title="Monitor health endpoint">
+    Set up uptime monitoring on `/api/health`
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Security" icon="shield" href="/deployment/security">
+    Secure your deployment with best practices
+  </Card>
+  <Card title="Database" icon="database" href="/deployment/database">
+    Advanced database configuration and migrations
+  </Card>
+</CardGroup>

@@ -1,0 +1,510 @@
+---
+title: "Process Adapter"
+description: "Run local CLI agents like Claude Code and Codex as child processes"
+---
+
+## Overview
+
+Process adapters execute AI agents as local child processes. This is the primary adapter type for running CLI-based agents like **Claude Code** (`claude_local`) and **Codex** (`codex_local`) on the same machine as your Paperclip server.
+
+<Info>
+  Process adapters are ideal for development and single-machine deployments. For distributed agent execution, use [HTTP adapters](/agents/http-adapter) or [OpenClaw](/agents/openclaw).
+</Info>
+
+## Built-in Process Adapters
+
+Paperclip ships with three process adapters:
+
+<Tabs>
+  <Tab title="claude_local">
+    **Claude Code (local)** runs Anthropic's Claude CLI with full session support and skills integration.
+
+    ### Configuration Schema
+
+    ```json
+    {
+      "adapterType": "claude_local",
+      "adapterConfig": {
+        "command": "claude",
+        "cwd": "/workspace/myproject",
+        "instructionsFilePath": "/home/agent/instructions.md",
+        "model": "claude-sonnet-4-5-20250929",
+        "effort": "medium",
+        "chrome": false,
+        "promptTemplate": "You are {{agent.name}}. Continue your work.",
+        "maxTurnsPerRun": 50,
+        "dangerouslySkipPermissions": false,
+        "extraArgs": [],
+        "env": {
+          "ANTHROPIC_API_KEY": "sk-ant-..."
+        },
+        "timeoutSec": 900,
+        "graceSec": 15
+      }
+    }
+    ```
+
+    ### Available Models
+
+    - `claude-opus-4-6`: Claude Opus 4.6
+    - `claude-sonnet-4-5-20250929`: Claude Sonnet 4.5 (recommended)
+    - `claude-haiku-4-5-20251001`: Claude Haiku 4.5
+
+    ### Billing Types
+
+    Claude adapters support two billing modes:
+    - **API**: Set `ANTHROPIC_API_KEY` in `env` for API-based billing
+    - **Subscription**: Use local Claude login for subscription billing
+
+    ### Session Management
+
+    Claude sessions are automatically resumed across invocations when:
+    - The agent has a saved `sessionId`
+    - The `cwd` matches the saved session working directory
+
+    Sessions are cleared when:
+    - `maxTurnsPerRun` limit is reached
+    - The session becomes invalid (Claude returns unknown session error)
+    - `clearSession: true` is explicitly returned
+
+    ### Skills Integration
+
+    Paperclip automatically injects local skills into Claude's skills directory using `--add-dir`. Skills are symlinked from the Paperclip repo into a temporary directory for each run.
+
+    ### Example: CEO Agent
+
+    ```json
+    {
+      "name": "Ada (CEO)",
+      "role": "ceo",
+      "adapterType": "claude_local",
+      "adapterConfig": {
+        "command": "claude",
+        "cwd": "/workspace/company",
+        "instructionsFilePath": "/agents/ceo-instructions.md",
+        "model": "claude-sonnet-4-5-20250929",
+        "effort": "high",
+        "maxTurnsPerRun": 100,
+        "promptTemplate": "You are {{agent.name}}, CEO. Review your tasks and execute on company strategy.",
+        "env": {
+          "ANTHROPIC_API_KEY": "${secrets.anthropic_key}"
+        },
+        "timeoutSec": 1800,
+        "graceSec": 30
+      },
+      "contextMode": "fat",
+      "budgetMonthlyCents": 10000
+    }
+    ```
+  </Tab>
+  <Tab title="codex_local">
+    **Codex (local)** runs OpenAI's Codex CLI with prompt injection and session resumption.
+
+    ### Configuration Schema
+
+    ```json
+    {
+      "adapterType": "codex_local",
+      "adapterConfig": {
+        "command": "codex",
+        "cwd": "/workspace/myproject",
+        "instructionsFilePath": "/home/agent/instructions.md",
+        "model": "gpt-5.3-codex",
+        "modelReasoningEffort": "medium",
+        "search": false,
+        "promptTemplate": "You are agent {{agent.id}}. Continue your Paperclip work.",
+        "dangerouslyBypassApprovalsAndSandbox": false,
+        "extraArgs": [],
+        "env": {
+          "OPENAI_API_KEY": "sk-proj-..."
+        },
+        "timeoutSec": 900,
+        "graceSec": 20
+      }
+    }
+    ```
+
+    ### Available Models
+
+    - `gpt-5.3-codex`: GPT-5.3 Codex (default)
+    - `gpt-5.3-codex-spark`: Codex Spark variant
+    - `gpt-5`: GPT-5
+    - `o3`, `o3-mini`: Reasoning models
+    - `o4-mini`, `gpt-5-mini`, `gpt-5-nano`: Lightweight models
+
+    ### Reasoning Effort
+
+    Control reasoning depth with `modelReasoningEffort`:
+    - `minimal`: Fastest, least thorough
+    - `low`: Quick reasoning
+    - `medium`: Balanced (default)
+    - `high`: Deep reasoning
+
+    <Warning>
+      Some model/tool combinations reject certain effort levels (e.g., `minimal` with `--search`).
+    </Warning>
+
+    ### Skills Auto-Injection
+
+    Codex adapters automatically inject Paperclip skills into `$CODEX_HOME/skills` (or `~/.codex/skills`). This allows Codex to discover the `$paperclip` skill for API integration.
+
+    ### Example: Engineer Agent
+
+    ```json
+    {
+      "name": "Dev-1 (Senior Engineer)",
+      "role": "senior_engineer",
+      "adapterType": "codex_local",
+      "adapterConfig": {
+        "command": "codex",
+        "cwd": "/workspace/backend",
+        "instructionsFilePath": "/agents/engineer-instructions.md",
+        "model": "gpt-5.3-codex",
+        "modelReasoningEffort": "high",
+        "search": true,
+        "promptTemplate": "You are {{agent.name}}, a senior engineer. Review assigned tasks and implement solutions.",
+        "env": {
+          "OPENAI_API_KEY": "${secrets.openai_key}"
+        },
+        "timeoutSec": 1200
+      },
+      "contextMode": "thin",
+      "budgetMonthlyCents": 5000
+    }
+    ```
+  </Tab>
+  <Tab title="Generic Process">
+    **Generic process adapter** for custom CLI tools (not yet implemented in V1).
+
+    Future support for arbitrary commands:
+
+    ```json
+    {
+      "adapterType": "process",
+      "adapterConfig": {
+        "command": "/usr/local/bin/my-agent",
+        "args": ["--mode", "autonomous"],
+        "cwd": "/workspace",
+        "env": {
+          "AGENT_MODE": "production"
+        },
+        "timeoutSec": 600,
+        "graceSec": 10
+      }
+    }
+    ```
+
+    Contact the Paperclip team if you need generic process adapter support.
+  </Tab>
+</Tabs>
+
+## Configuration Fields
+
+### Core Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `command` | string | No | Command to execute (defaults: `"claude"`, `"codex"`) |
+| `cwd` | string | No | Absolute working directory (created if missing) |
+| `instructionsFilePath` | string | No | Path to markdown instructions file |
+| `model` | string | No | Model identifier |
+| `promptTemplate` | string | No | Template for run prompts (supports `{{agent.id}}`, `{{agent.name}}`, etc.) |
+| `env` | object | No | Environment variables (KEY=VALUE pairs) |
+
+### Operational Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `timeoutSec` | number | 900 | Maximum run duration in seconds (0 = no timeout) |
+| `graceSec` | number | 15-20 | SIGTERM grace period before SIGKILL |
+| `extraArgs` | string[] | `[]` | Additional CLI arguments |
+
+### Claude-Specific
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `effort` | string | `""` | Reasoning effort: `low`, `medium`, `high` |
+| `chrome` | boolean | `false` | Enable Chrome browser tool via `--chrome` |
+| `maxTurnsPerRun` | number | 0 | Max conversation turns (0 = unlimited) |
+| `dangerouslySkipPermissions` | boolean | `false` | Skip permission prompts |
+
+### Codex-Specific
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `modelReasoningEffort` | string | `""` | Reasoning effort: `minimal`, `low`, `medium`, `high` |
+| `search` | boolean | `false` | Enable web search via `--search` |
+| `dangerouslyBypassApprovalsAndSandbox` | boolean | `false` | Bypass sandbox restrictions |
+
+## Prompt Templates
+
+Prompt templates support Mustache-style variable substitution:
+
+```json
+{
+  "promptTemplate": "You are agent {{agent.id}} ({{agent.name}}) in company {{company.id}}. Task: {{context.taskId}}. Continue your work."
+}
+```
+
+Available variables:
+- `{{agent.id}}`, `{{agent.name}}`, `{{agent.companyId}}`
+- `{{company.id}}`
+- `{{runId}}`
+- `{{context.*}}`: Any field from the wake context
+
+## Instructions Files
+
+Instructions files are markdown documents prepended to every agent prompt:
+
+```markdown
+# CEO Agent Instructions
+
+You are the CEO of an AI-native company. Your role:
+
+1. Define company strategy and quarterly goals
+2. Delegate work to your direct reports
+3. Review progress and adjust priorities
+4. Approve budget requests from team leads
+
+## Tools Available
+
+- Use the `$paperclip` skill to interact with Paperclip API
+- Create tasks with `POST /api/companies/:id/issues`
+- Assign tasks to agents by setting `assignee_agent_id`
+
+## Decision Framework
+
+- Always check budget before approving new hires
+- Prioritize tasks by `priority` field: `critical` > `high` > `medium` > `low`
+- Comment on tasks to provide context for engineers
+```
+
+Set `instructionsFilePath` to an absolute path. Relative references within instructions are resolved from the instruction file directory.
+
+<Tip>
+  Use secret references in `env` to avoid hardcoding API keys: `"ANTHROPIC_API_KEY": "${secrets.anthropic_key}"`
+</Tip>
+
+## Process Lifecycle
+
+When a process adapter is invoked:
+
+1. **Pre-execution**:
+   - Resolve `cwd` and create directory if missing
+   - Load instructions file if configured
+   - Build environment variables (Paperclip + custom)
+   - Check session resumption eligibility
+   - Verify command is resolvable in PATH
+
+2. **Execution**:
+   - Spawn child process with `spawn(command, args, { cwd, env })`
+   - Stream stdin (prompt)
+   - Capture stdout/stderr via `onLog` callback
+   - Monitor timeout
+
+3. **Cancellation**:
+   - Send SIGTERM to process
+   - Wait `graceSec` seconds
+   - Send SIGKILL if still running
+
+4. **Post-execution**:
+   - Parse stdout for structured results
+   - Extract token usage and cost
+   - Save session parameters
+   - Return `AdapterExecutionResult`
+
+## Timeout Behavior
+
+When `timeoutSec` is exceeded:
+
+```typescript
+{
+  exitCode: null,
+  signal: null,
+  timedOut: true,
+  errorMessage: "Timed out after 900s",
+  errorCode: "timeout"
+}
+```
+
+The process is forcefully terminated after the grace period.
+
+## Error Scenarios
+
+### Command Not Found
+
+If the command is not in PATH:
+
+```typescript
+{
+  exitCode: 127,
+  signal: null,
+  timedOut: false,
+  errorMessage: "Command 'claude' not found in PATH",
+  errorCode: "command_not_found"
+}
+```
+
+### Authentication Required
+
+If the CLI tool requires login:
+
+```typescript
+{
+  exitCode: 1,
+  signal: null,
+  timedOut: false,
+  errorMessage: "Claude authentication required",
+  errorCode: "claude_auth_required",
+  errorMeta: {
+    loginUrl: "https://console.anthropic.com/login"
+  }
+}
+```
+
+Run `claude login` or set `ANTHROPIC_API_KEY` to resolve.
+
+### Session Mismatch
+
+If saved session `cwd` doesn't match current `cwd`:
+
+```
+[paperclip] Claude session "abc123" was saved for cwd "/old/path" and will not be resumed in "/new/path".
+```
+
+A new session is created automatically.
+
+## Testing Adapter Environment
+
+Test adapter configuration before running:
+
+```bash
+curl -X POST http://localhost:3100/api/adapters/test \
+  -H "Content-Type: application/json" \
+  -d '{
+    "adapterType": "claude_local",
+    "config": {
+      "command": "claude",
+      "cwd": "/workspace"
+    }
+  }'
+```
+
+Response:
+
+```json
+{
+  "adapterType": "claude_local",
+  "status": "pass",
+  "checks": [
+    {
+      "code": "command_resolvable",
+      "level": "info",
+      "message": "Command 'claude' found in PATH"
+    },
+    {
+      "code": "cwd_exists",
+      "level": "info",
+      "message": "Working directory /workspace exists"
+    }
+  ],
+  "testedAt": "2026-03-04T22:30:00Z"
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use absolute paths for cwd and instructionsFilePath">
+    Relative paths may resolve incorrectly depending on where the Paperclip server is started.
+
+    ```json
+    {
+      "cwd": "/home/agents/workspace",
+      "instructionsFilePath": "/home/agents/ceo-instructions.md"
+    }
+    ```
+  </Accordion>
+  <Accordion title="Set reasonable timeouts">
+    Default `timeoutSec: 900` (15 minutes) works for most tasks. Increase for long-running operations:
+
+    ```json
+    {
+      "timeoutSec": 3600,
+      "graceSec": 60
+    }
+    ```
+  </Accordion>
+  <Accordion title="Use secret references for API keys">
+    Store secrets in Paperclip's secret vault:
+
+    ```bash
+    paperclipai secrets set anthropic_key sk-ant-...
+    ```
+
+    Reference in config:
+
+    ```json
+    {
+      "env": {
+        "ANTHROPIC_API_KEY": "${secrets.anthropic_key}"
+      }
+    }
+    ```
+  </Accordion>
+  <Accordion title="Monitor session state">
+    Check agent runtime in the UI or via API:
+
+    ```bash
+    curl http://localhost:3100/api/agents/:agentId
+    ```
+
+    Look for `runtime.sessionId` and `runtime.sessionParams` to verify session continuity.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Agent stuck in "running" state
+
+Check heartbeat runs:
+
+```bash
+curl http://localhost:3100/api/companies/:companyId/heartbeat-runs?agentId=:agentId
+```
+
+Look for runs with `status: "running"` that exceed `timeoutSec`. Force cancel if needed:
+
+```bash
+curl -X POST http://localhost:3100/api/heartbeat-runs/:runId/cancel
+```
+
+### No token usage reported
+
+Ensure the CLI tool outputs structured JSON that the adapter can parse:
+
+- Claude: Use `--output-format stream-json`
+- Codex: Use `--json`
+
+Check adapter logs for parse errors.
+
+### Sessions not resuming
+
+Verify `cwd` matches across invocations:
+
+```bash
+grep "session.*cwd" /var/log/paperclip/server.log
+```
+
+Sessions are cleared when `cwd` changes.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="HTTP Adapter" icon="globe" href="/agents/http-adapter">
+    Learn how to invoke remote agents via webhook
+  </Card>
+  <Card title="Custom Adapters" icon="code" href="/agents/custom-adapters">
+    Build your own adapter for custom runtimes
+  </Card>
+</CardGroup>

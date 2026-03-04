@@ -1,0 +1,213 @@
+---
+title: Local Deployment
+description: Run Paperclip on your local machine for development and testing
+---
+
+Run Paperclip locally for development, testing, or single-operator workflows. Local deployment uses embedded PostgreSQL and requires no external dependencies.
+
+## Quick Start
+
+The fastest way to get started:
+
+```bash
+npx paperclipai onboard --yes
+```
+
+Or clone and run manually:
+
+```bash
+git clone https://github.com/paperclipai/paperclip.git
+cd paperclip
+pnpm install
+pnpm dev
+```
+
+The server starts at `http://localhost:3100` with an embedded PostgreSQL database.
+
+## Prerequisites
+
+- **Node.js 20+** - Required for running the server
+- **pnpm 9.15+** - Package manager (use `corepack enable` to install)
+
+## Default Local Setup
+
+By default, local deployment runs in `local_trusted` mode:
+
+- **No login required** - Optimized for fastest local startup
+- **Localhost-only binding** - Binds to `127.0.0.1` for security
+- **Embedded database** - PostgreSQL runs in-process
+- **Local file storage** - Attachments stored on disk
+- **Company deletion enabled** - Easy cleanup during development
+
+## Data Persistence
+
+All data persists in `~/.paperclip/instances/default/`:
+
+```
+~/.paperclip/instances/default/
+├── db/                    # Embedded PostgreSQL data
+├── data/storage/          # Uploaded files and attachments
+├── secrets/master.key     # Local encryption key
+├── workspaces/           # Agent workspace directories
+└── config.json           # Instance configuration
+```
+
+### Custom Data Directory
+
+Override the default location:
+
+```bash
+PAPERCLIP_HOME=/custom/path pnpm paperclipai run
+```
+
+### Multiple Instances
+
+Run multiple isolated instances:
+
+```bash
+PAPERCLIP_INSTANCE_ID=dev pnpm paperclipai run
+PAPERCLIP_INSTANCE_ID=staging pnpm paperclipai run
+```
+
+Each instance gets its own directory under `~/.paperclip/instances/`.
+
+## Development Commands
+
+```bash
+# Start development server with auto-reload
+pnpm dev
+
+# Run with full setup validation
+pnpm paperclipai run
+
+# Server only (no UI dev server)
+pnpm dev:server
+
+# Run tests
+pnpm test:run
+
+# Type checking
+pnpm typecheck
+
+# Build for production
+pnpm build
+```
+
+## Health Checks
+
+Verify your local installation:
+
+```bash
+# Check server health
+curl http://localhost:3100/api/health
+
+# Expected: {"status":"ok"}
+
+# List companies
+curl http://localhost:3100/api/companies
+
+# Expected: JSON array
+```
+
+## Reset Local Database
+
+To wipe data and start fresh:
+
+```bash
+rm -rf ~/.paperclip/instances/default/db
+pnpm dev
+```
+
+The database will be recreated automatically on next startup.
+
+## Docker Local Deployment
+
+Run Paperclip in Docker without installing Node locally:
+
+```bash
+docker build -t paperclip-local .
+docker run --name paperclip \
+  -p 3100:3100 \
+  -e HOST=0.0.0.0 \
+  -e PAPERCLIP_HOME=/paperclip \
+  -v "$(pwd)/data/docker-paperclip:/paperclip" \
+  paperclip-local
+```
+
+Or use Docker Compose:
+
+```bash
+docker compose -f docker-compose.quickstart.yml up --build
+```
+
+Data persists in the mounted volume (`./data/docker-paperclip`).
+
+### With AI Agent Support
+
+To use local Claude or Codex adapters, pass API keys:
+
+```bash
+docker run --name paperclip \
+  -p 3100:3100 \
+  -e HOST=0.0.0.0 \
+  -e PAPERCLIP_HOME=/paperclip \
+  -e OPENAI_API_KEY=sk-... \
+  -e ANTHROPIC_API_KEY=sk-ant-... \
+  -v "$(pwd)/data/docker-paperclip:/paperclip" \
+  paperclip-local
+```
+
+## Private Network Access (Tailscale)
+
+For private network access while keeping authentication optional:
+
+```bash
+pnpm dev --tailscale-auth
+```
+
+This runs in `authenticated/private` mode and binds to `0.0.0.0`.
+
+### Allow Custom Hostnames
+
+Add private hostnames (e.g., Tailscale machine names):
+
+```bash
+pnpm paperclipai allowed-hostname my-macbook-pro
+```
+
+## Troubleshooting
+
+### Port Already in Use
+
+Change the default port:
+
+```bash
+PORT=3200 pnpm dev
+```
+
+### Database Migration Issues
+
+Run migrations manually:
+
+```bash
+pnpm db:migrate
+```
+
+### Check Logs
+
+Logs are written to `.paperclip/logs/server.log`:
+
+```bash
+tail -f .paperclip/logs/server.log
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/deployment/configuration">
+    Configure deployment mode, storage, and secrets
+  </Card>
+  <Card title="Database Setup" icon="database" href="/deployment/database">
+    Switch to external PostgreSQL for production
+  </Card>
+</CardGroup>

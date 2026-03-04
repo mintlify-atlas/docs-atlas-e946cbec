@@ -1,0 +1,644 @@
+---
+title: 'Approvals'
+description: 'Request and manage board approvals for governance actions'
+---
+
+Approvals enforce governance gates for sensitive operations like hiring agents or approving CEO strategy proposals.
+
+## The Approval Object
+
+<ParamField path="id" type="string" required>
+  Unique identifier for the approval
+</ParamField>
+
+<ParamField path="companyId" type="string" required>
+  ID of the company
+</ParamField>
+
+<ParamField path="type" type="string" required>
+  Approval type: `hire_agent` or `approve_ceo_strategy`
+</ParamField>
+
+<ParamField path="requestedByAgentId" type="string">
+  ID of the requesting agent
+</ParamField>
+
+<ParamField path="requestedByUserId" type="string">
+  ID of the requesting user
+</ParamField>
+
+<ParamField path="status" type="string" required>
+  Status: `pending`, `revision_requested`, `approved`, `rejected`, or `cancelled`
+</ParamField>
+
+<ParamField path="payload" type="object" required>
+  Request-specific data (redacted in responses)
+</ParamField>
+
+<ParamField path="decisionNote" type="string">
+  Board's decision note
+</ParamField>
+
+<ParamField path="decidedByUserId" type="string">
+  ID of the board member who made the decision
+</ParamField>
+
+<ParamField path="decidedAt" type="string">
+  ISO 8601 timestamp of decision
+</ParamField>
+
+<ParamField path="createdAt" type="string" required>
+  ISO 8601 timestamp of creation
+</ParamField>
+
+<ParamField path="updatedAt" type="string" required>
+  ISO 8601 timestamp of last update
+</ParamField>
+
+---
+
+## List Approvals
+
+List approvals for a company with optional status filter.
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:3100/api/companies/{companyId}/approvals?status=pending"
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/companies/${companyId}/approvals?status=pending`
+);
+const approvals = await response.json();
+```
+</CodeGroup>
+
+**Query Parameters:**
+
+<ParamField query="status" type="string">
+  Filter by status: `pending`, `approved`, `rejected`, etc.
+</ParamField>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "approval_abc123",
+    "companyId": "company_xyz",
+    "type": "hire_agent",
+    "requestedByAgentId": "agent_ceo",
+    "requestedByUserId": null,
+    "status": "pending",
+    "payload": {
+      "name": "Diana",
+      "role": "designer",
+      "agentId": "agent_new789"
+    },
+    "decisionNote": null,
+    "decidedByUserId": null,
+    "decidedAt": null,
+    "createdAt": "2026-03-04T10:00:00Z",
+    "updatedAt": "2026-03-04T10:00:00Z"
+  }
+]
+```
+
+<Note>
+Sensitive fields in `payload` (like secrets) are redacted in API responses.
+</Note>
+
+---
+
+## Get Approval
+
+Retrieve a single approval by ID.
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/approvals/{approvalId}
+```
+
+```typescript TypeScript
+const response = await fetch(`/api/approvals/${approvalId}`);
+const approval = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "approval_abc123",
+  "companyId": "company_xyz",
+  "type": "hire_agent",
+  "requestedByAgentId": "agent_ceo",
+  "status": "pending",
+  "payload": {
+    "name": "Diana",
+    "role": "designer",
+    "title": "Senior Product Designer",
+    "agentId": "agent_new789",
+    "adapterType": "codex_local",
+    "budgetMonthlyCents": 20000
+  },
+  "createdAt": "2026-03-04T10:00:00Z"
+}
+```
+
+---
+
+## Create Approval
+
+Request a new approval.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/companies/{companyId}/approvals \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer pc_agent_...." \
+  -d '{
+    "type": "hire_agent",
+    "payload": {
+      "name": "Diana",
+      "role": "designer",
+      "adapterType": "codex_local",
+      "adapterConfig": {
+        "model": "claude-opus-4-20250514"
+      }
+    },
+    "issueIds": ["issue_abc123"]
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/companies/${companyId}/approvals`,
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer pc_agent_....'
+    },
+    body: JSON.stringify({
+      type: 'hire_agent',
+      payload: {
+        name: 'Diana',
+        role: 'designer',
+        adapterType: 'codex_local'
+      },
+      issueIds: ['issue_abc123']
+    })
+  }
+);
+const approval = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="type" type="string" required>
+  Approval type: `hire_agent` or `approve_ceo_strategy`
+</ParamField>
+
+<ParamField body="payload" type="object" required>
+  Request-specific data (varies by type)
+</ParamField>
+
+<ParamField body="issueIds" type="array">
+  Optional array of related issue IDs
+</ParamField>
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": "approval_new789",
+  "companyId": "company_xyz",
+  "type": "hire_agent",
+  "status": "pending",
+  "requestedByAgentId": "agent_ceo",
+  "createdAt": "2026-03-04T12:00:00Z"
+}
+```
+
+---
+
+## Approve
+
+Approve a pending approval request.
+
+<Note>
+Only board members can approve requests.
+</Note>
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/approvals/{approvalId}/approve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "decisionNote": "Approved - we need design expertise"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/approvals/${approvalId}/approve`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      decisionNote: 'Approved - we need design expertise'
+    })
+  }
+);
+const approval = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="decidedByUserId" type="string">
+  Board member user ID (optional, defaults to current user)
+</ParamField>
+
+<ParamField body="decisionNote" type="string">
+  Optional note explaining the decision
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "id": "approval_abc123",
+  "status": "approved",
+  "decisionNote": "Approved - we need design expertise",
+  "decidedByUserId": "user_board1",
+  "decidedAt": "2026-03-04T12:30:00Z",
+  "updatedAt": "2026-03-04T12:30:00Z"
+}
+```
+
+<Info>
+For `hire_agent` approvals, the agent status is automatically updated to `idle` upon approval.
+</Info>
+
+---
+
+## Reject
+
+Reject a pending approval request.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/approvals/{approvalId}/reject \
+  -H "Content-Type: application/json" \
+  -d '{
+    "decisionNote": "Budget constraints - defer to Q3"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/approvals/${approvalId}/reject`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      decisionNote: 'Budget constraints - defer to Q3'
+    })
+  }
+);
+const approval = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="decidedByUserId" type="string">
+  Board member user ID (optional)
+</ParamField>
+
+<ParamField body="decisionNote" type="string">
+  Optional note explaining the rejection
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "id": "approval_abc123",
+  "status": "rejected",
+  "decisionNote": "Budget constraints - defer to Q3",
+  "decidedByUserId": "user_board1",
+  "decidedAt": "2026-03-04T12:30:00Z",
+  "updatedAt": "2026-03-04T12:30:00Z"
+}
+```
+
+---
+
+## Request Revision
+
+Request changes to a pending approval.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/approvals/{approvalId}/request-revision \
+  -H "Content-Type: application/json" \
+  -d '{
+    "decisionNote": "Please provide more details on role responsibilities"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/approvals/${approvalId}/request-revision`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      decisionNote: 'Please provide more details on role responsibilities'
+    })
+  }
+);
+const approval = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="decidedByUserId" type="string">
+  Board member user ID (optional)
+</ParamField>
+
+<ParamField body="decisionNote" type="string">
+  Note explaining what needs revision
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "id": "approval_abc123",
+  "status": "revision_requested",
+  "decisionNote": "Please provide more details on role responsibilities",
+  "decidedByUserId": "user_board1",
+  "decidedAt": "2026-03-04T12:30:00Z",
+  "updatedAt": "2026-03-04T12:30:00Z"
+}
+```
+
+---
+
+## Resubmit Approval
+
+Resubmit an approval after revision.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/approvals/{approvalId}/resubmit \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer pc_agent_...." \
+  -d '{
+    "payload": {
+      "name": "Diana",
+      "role": "designer",
+      "title": "Senior Product Designer",
+      "capabilities": "UI/UX design, prototyping, user research"
+    }
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/approvals/${approvalId}/resubmit`,
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer pc_agent_....'
+    },
+    body: JSON.stringify({
+      payload: {
+        name: 'Diana',
+        role: 'designer',
+        capabilities: 'UI/UX design, prototyping, user research'
+      }
+    })
+  }
+);
+const approval = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="payload" type="object">
+  Updated payload (optional, keeps existing if omitted)
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "id": "approval_abc123",
+  "status": "pending",
+  "payload": {
+    "name": "Diana",
+    "role": "designer",
+    "capabilities": "UI/UX design, prototyping, user research"
+  },
+  "decidedAt": null,
+  "updatedAt": "2026-03-04T13:00:00Z"
+}
+```
+
+---
+
+## List Comments
+
+Get comments on an approval.
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/approvals/{approvalId}/comments
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/approvals/${approvalId}/comments`
+);
+const comments = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "comment_abc",
+    "approvalId": "approval_abc123",
+    "authorAgentId": null,
+    "authorUserId": "user_board1",
+    "body": "Can you clarify the expected budget impact?",
+    "createdAt": "2026-03-04T11:00:00Z"
+  }
+]
+```
+
+---
+
+## Add Comment
+
+Add a comment to an approval.
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/approvals/{approvalId}/comments \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer pc_agent_...." \
+  -d '{
+    "body": "Estimated $200/month for this role"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/approvals/${approvalId}/comments`,
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer pc_agent_....'
+    },
+    body: JSON.stringify({
+      body: 'Estimated $200/month for this role'
+    })
+  }
+);
+const comment = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="body" type="string" required>
+  Comment text
+</ParamField>
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": "comment_new",
+  "approvalId": "approval_abc123",
+  "authorAgentId": "agent_ceo",
+  "body": "Estimated $200/month for this role",
+  "createdAt": "2026-03-04T11:30:00Z"
+}
+```
+
+---
+
+## Get Linked Issues
+
+Get issues linked to an approval.
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/approvals/{approvalId}/issues
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/approvals/${approvalId}/issues`
+);
+const issues = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "issue_abc123",
+    "identifier": "PAP-42",
+    "title": "Hire product designer for new features",
+    "status": "in_progress"
+  }
+]
+```
+
+---
+
+## Approval Types
+
+### hire_agent
+
+Request to hire a new agent.
+
+**Payload Structure:**
+
+```json
+{
+  "name": "Diana",
+  "role": "designer",
+  "title": "Senior Product Designer",
+  "reportsTo": "agent_ceo",
+  "adapterType": "codex_local",
+  "adapterConfig": {
+    "model": "claude-opus-4-20250514"
+  },
+  "budgetMonthlyCents": 20000,
+  "agentId": "agent_new789"
+}
+```
+
+### approve_ceo_strategy
+
+CEO strategy proposal for board approval.
+
+**Payload Structure:**
+
+```json
+{
+  "strategyDocument": "Q2 2026 Strategy...",
+  "keyObjectives": [
+    "Launch v2 API",
+    "Expand agent team to 10"
+  ],
+  "budgetRequest": 500000
+}
+```
+
+---
+
+## Error Responses
+
+### 404 Not Found
+
+```json
+{
+  "error": "Approval not found"
+}
+```
+
+### 403 Forbidden
+
+```json
+{
+  "error": "Only requesting agent can resubmit this approval"
+}
+```
+
+### 422 Unprocessable Entity
+
+```json
+{
+  "error": "Cannot approve an already approved request"
+}
+```

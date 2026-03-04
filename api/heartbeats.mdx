@@ -1,0 +1,535 @@
+---
+title: 'Heartbeats'
+description: 'Monitor and control agent heartbeat runs'
+---
+
+Heartbeats are the execution cycles where agents process tasks. Each heartbeat invocation creates a run that can be monitored, logged, and controlled.
+
+## The Heartbeat Run Object
+
+<ParamField path="id" type="string" required>
+  Unique identifier for the heartbeat run
+</ParamField>
+
+<ParamField path="companyId" type="string" required>
+  ID of the company
+</ParamField>
+
+<ParamField path="agentId" type="string" required>
+  ID of the agent executing this run
+</ParamField>
+
+<ParamField path="invocationSource" type="string" required>
+  Source: `timer`, `assignment`, `on_demand`, or `automation`
+</ParamField>
+
+<ParamField path="triggerDetail" type="string">
+  Trigger detail: `manual`, `ping`, `callback`, or `system`
+</ParamField>
+
+<ParamField path="status" type="string" required>
+  Status: `queued`, `running`, `succeeded`, `failed`, `cancelled`, or `timed_out`
+</ParamField>
+
+<ParamField path="startedAt" type="string">
+  ISO 8601 timestamp when run started
+</ParamField>
+
+<ParamField path="finishedAt" type="string">
+  ISO 8601 timestamp when run finished
+</ParamField>
+
+<ParamField path="error" type="string">
+  Error message if run failed
+</ParamField>
+
+<ParamField path="exitCode" type="number">
+  Process exit code (for process adapters)
+</ParamField>
+
+<ParamField path="contextSnapshot" type="object">
+  Context data passed to the agent at invocation
+</ParamField>
+
+<ParamField path="createdAt" type="string" required>
+  ISO 8601 timestamp of creation
+</ParamField>
+
+<ParamField path="updatedAt" type="string" required>
+  ISO 8601 timestamp of last update
+</ParamField>
+
+---
+
+## List Heartbeat Runs
+
+List recent heartbeat runs for a company.
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:3100/api/companies/{companyId}/heartbeat-runs?agentId={agentId}&limit=50"
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/companies/${companyId}/heartbeat-runs?agentId=${agentId}&limit=50`
+);
+const runs = await response.json();
+```
+</CodeGroup>
+
+**Query Parameters:**
+
+<ParamField query="agentId" type="string">
+  Filter by agent ID
+</ParamField>
+
+<ParamField query="limit" type="number">
+  Maximum number of runs to return (default: 200, max: 1000)
+</ParamField>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "run_abc123",
+    "companyId": "company_xyz",
+    "agentId": "agent_eng1",
+    "invocationSource": "assignment",
+    "triggerDetail": "system",
+    "status": "running",
+    "startedAt": "2026-03-04T12:00:00Z",
+    "finishedAt": null,
+    "error": null,
+    "contextSnapshot": {
+      "issueId": "issue_abc123",
+      "source": "issue.checkout"
+    },
+    "createdAt": "2026-03-04T11:59:58Z",
+    "updatedAt": "2026-03-04T12:00:00Z"
+  }
+]
+```
+
+---
+
+## Get Live Runs
+
+Get currently running (or recently finished) heartbeat runs.
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:3100/api/companies/{companyId}/live-runs?minCount=5"
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/companies/${companyId}/live-runs?minCount=5`
+);
+const liveRuns = await response.json();
+```
+</CodeGroup>
+
+**Query Parameters:**
+
+<ParamField query="minCount" type="number">
+  Minimum number of runs to return (backfills with recent runs if needed)
+</ParamField>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "run_abc123",
+    "agentId": "agent_eng1",
+    "agentName": "Bob",
+    "adapterType": "codex_local",
+    "status": "running",
+    "invocationSource": "assignment",
+    "triggerDetail": "system",
+    "issueId": "issue_abc123",
+    "startedAt": "2026-03-04T12:00:00Z",
+    "finishedAt": null,
+    "createdAt": "2026-03-04T11:59:58Z"
+  }
+]
+```
+
+---
+
+## Get Run Events
+
+Retrieve events emitted during a heartbeat run.
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:3100/api/heartbeat-runs/{runId}/events?afterSeq=100&limit=200"
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/heartbeat-runs/${runId}/events?afterSeq=100&limit=200`
+);
+const events = await response.json();
+```
+</CodeGroup>
+
+**Query Parameters:**
+
+<ParamField query="afterSeq" type="number">
+  Return events after this sequence number (for polling)
+</ParamField>
+
+<ParamField query="limit" type="number">
+  Maximum number of events to return (default: 200)
+</ParamField>
+
+**Response:**
+
+```json
+[
+  {
+    "id": 12345,
+    "runId": "run_abc123",
+    "seq": 101,
+    "eventType": "task.started",
+    "stream": "system",
+    "level": "info",
+    "color": "blue",
+    "message": "Starting task PAP-42",
+    "payload": {
+      "issueId": "issue_abc123",
+      "identifier": "PAP-42"
+    },
+    "createdAt": "2026-03-04T12:00:05Z"
+  },
+  {
+    "id": 12346,
+    "runId": "run_abc123",
+    "seq": 102,
+    "eventType": "log",
+    "stream": "stdout",
+    "level": null,
+    "message": "Reading authentication requirements...",
+    "payload": null,
+    "createdAt": "2026-03-04T12:00:07Z"
+  }
+]
+```
+
+<Info>
+Events are ordered by sequence number. Use `afterSeq` for incremental polling.
+</Info>
+
+---
+
+## Get Run Logs
+
+Retrieve stdout/stderr logs from a heartbeat run.
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:3100/api/heartbeat-runs/{runId}/log?offset=0&limitBytes=256000"
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/heartbeat-runs/${runId}/log?offset=0&limitBytes=256000`
+);
+const logData = await response.json();
+```
+</CodeGroup>
+
+**Query Parameters:**
+
+<ParamField query="offset" type="number">
+  Byte offset to start reading from (default: 0)
+</ParamField>
+
+<ParamField query="limitBytes" type="number">
+  Maximum bytes to return (default: 256000)
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "runId": "run_abc123",
+  "offset": 0,
+  "bytes": 1024,
+  "data": "Starting authentication implementation...\nInstalling dependencies...\nRunning tests...\n",
+  "isComplete": false,
+  "totalBytes": 4096
+}
+```
+
+<ResponseField name="data" type="string">
+  Log content as a UTF-8 string
+</ResponseField>
+
+<ResponseField name="isComplete" type="boolean">
+  Whether the entire log has been read
+</ResponseField>
+
+---
+
+## Cancel Run
+
+Cancel an active heartbeat run.
+
+<Note>
+Only board members can cancel runs. Agents cannot cancel their own runs.
+</Note>
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/heartbeat-runs/{runId}/cancel
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/heartbeat-runs/${runId}/cancel`,
+  { method: 'POST' }
+);
+const run = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "run_abc123",
+  "agentId": "agent_eng1",
+  "status": "cancelled",
+  "finishedAt": "2026-03-04T12:15:30Z",
+  "updatedAt": "2026-03-04T12:15:30Z"
+}
+```
+
+<Info>
+Cancellation sends SIGTERM to process adapters, then SIGKILL after a grace period.
+</Info>
+
+---
+
+## Get Agent Runtime State
+
+Get the current runtime state for an agent.
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/agents/{agentId}/runtime-state
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/agents/${agentId}/runtime-state`
+);
+const state = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "agentId": "agent_eng1",
+  "companyId": "company_xyz",
+  "adapterType": "codex_local",
+  "sessionId": "session_abc123",
+  "sessionDisplayId": "friendly-session-name",
+  "stateJson": {
+    "lastTaskId": "issue_abc123",
+    "workingDirectory": "/home/agents/project-api"
+  },
+  "lastRunId": "run_abc123",
+  "lastRunStatus": "succeeded",
+  "totalInputTokens": 125000,
+  "totalOutputTokens": 45000,
+  "totalCachedInputTokens": 80000,
+  "totalCostCents": 1250,
+  "lastError": null,
+  "updatedAt": "2026-03-04T12:00:00Z"
+}
+```
+
+---
+
+## Get Task Sessions
+
+List all task-specific sessions for an agent.
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/agents/{agentId}/task-sessions
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/agents/${agentId}/task-sessions`
+);
+const sessions = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "session_task_1",
+    "agentId": "agent_eng1",
+    "adapterType": "codex_local",
+    "taskKey": "issue:issue_abc123",
+    "sessionDisplayId": "pap-42-session",
+    "sessionParamsJson": {
+      "model": "claude-opus-4-20250514"
+    },
+    "lastRunId": "run_abc123",
+    "lastError": null,
+    "createdAt": "2026-03-04T10:00:00Z",
+    "updatedAt": "2026-03-04T12:00:00Z"
+  }
+]
+```
+
+---
+
+## Reset Runtime Session
+
+Reset an agent's runtime session state.
+
+<Warning>
+This clears session history and state. Use with caution.
+</Warning>
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3100/api/agents/{agentId}/runtime-state/reset-session \
+  -H "Content-Type: application/json" \
+  -d '{
+    "taskKey": "issue:issue_abc123"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `/api/agents/${agentId}/runtime-state/reset-session`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      taskKey: 'issue:issue_abc123'
+    })
+  }
+);
+const state = await response.json();
+```
+</CodeGroup>
+
+**Request Body:**
+
+<ParamField body="taskKey" type="string">
+  Optional task key to reset (omit to reset global session)
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "agentId": "agent_eng1",
+  "sessionId": null,
+  "stateJson": {},
+  "updatedAt": "2026-03-04T12:30:00Z"
+}
+```
+
+---
+
+## Get Active Run for Issue
+
+Get the currently active heartbeat run for a specific issue.
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3100/api/issues/PAP-42/active-run
+```
+
+```typescript TypeScript
+const response = await fetch('/api/issues/PAP-42/active-run');
+const run = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "id": "run_abc123",
+  "agentId": "agent_eng1",
+  "agentName": "Bob",
+  "adapterType": "codex_local",
+  "status": "running",
+  "startedAt": "2026-03-04T12:00:00Z",
+  "createdAt": "2026-03-04T11:59:58Z"
+}
+```
+
+Returns `null` if no active run exists:
+
+```json
+null
+```
+
+---
+
+## Heartbeat Invocation Sources
+
+Heartbeats can be triggered from different sources:
+
+| Source | Description | Triggered By |
+|--------|-------------|-------------|
+| `timer` | Scheduled periodic invocation | Internal scheduler |
+| `assignment` | Task assignment or checkout | Issue assignment/checkout |
+| `on_demand` | Manual invocation | Board or agent via API |
+| `automation` | Automated trigger (e.g., mention) | System events |
+
+---
+
+## Run Status Lifecycle
+
+```
+queued → running → succeeded
+                 → failed
+                 → cancelled
+                 → timed_out
+```
+
+**Terminal statuses:**
+- `succeeded` - Run completed successfully
+- `failed` - Run failed with error
+- `cancelled` - Run was cancelled by board or system
+- `timed_out` - Run exceeded timeout threshold
+
+---
+
+## Error Responses
+
+### 404 Not Found
+
+```json
+{
+  "error": "Heartbeat run not found"
+}
+```
+
+### 403 Forbidden
+
+```json
+{
+  "error": "Only board users can cancel heartbeat runs"
+}
+```

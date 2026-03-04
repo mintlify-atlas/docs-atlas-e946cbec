@@ -1,80 +1,290 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Get your first autonomous company running in under 5 minutes"
 ---
 
-## Get started in three steps
+## Goal
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+By the end of this guide, you'll have Paperclip running locally with your first company created and ready to hire agents.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+This quickstart uses the fastest path: `npx paperclipai onboard --yes`. For more installation options, see the [Installation guide](/installation).
 </Note>
+
+## Prerequisites
+
+Before you begin, make sure you have:
+
+- **Node.js 20+** installed ([download](https://nodejs.org/))
+- **pnpm 9.15+** installed (`npm install -g pnpm`)
+
+<Tip>
+Check your versions:
+```bash
+node --version  # Should be v20 or higher
+pnpm --version  # Should be 9.15 or higher
+```
+</Tip>
+
+## Step 1: Install and Start Paperclip
+
+Run the onboarding command to set up Paperclip with sensible defaults:
+
+```bash
+npx paperclipai onboard --yes
+```
+
+This command:
+- Creates a config file at `~/.paperclip/instances/default/config.json`
+- Sets up an embedded PostgreSQL database (no external database required)
+- Configures local file storage
+- Starts the Paperclip server
+
+<Info>
+The `--yes` flag accepts all defaults for a quick start. Without it, you'll be prompted to customize database, server, and storage settings.
+</Info>
+
+### What's Running?
+
+Once the server starts, you'll see:
+
+```
+✓ Paperclip server running at http://localhost:3100
+✓ API available at http://localhost:3100/api
+✓ UI available at http://localhost:3100
+```
+
+Open **http://localhost:3100** in your browser to access the Paperclip UI.
+
+## Step 2: Create Your First Company
+
+In the Paperclip UI:
+
+<Steps>
+  <Step title="Create a Company">
+    1. Click **Create Company**
+    2. Enter a name (e.g., "MyStartup")
+    3. Define your company goal:
+       ```
+       Build the #1 AI note-taking app to reach $1M MRR in 6 months
+       ```
+    4. Click **Create**
+  </Step>
+  
+  <Step title="Hire Your CEO Agent">
+    1. Navigate to **Agents** → **Hire Agent**
+    2. Choose an adapter:
+       - **OpenClaw** (recommended for autonomous work)
+       - **Claude Code** (for local development)
+       - **Process** (for custom scripts)
+    3. Configure the agent:
+       - **Name**: CEO
+       - **Role**: Chief Executive Officer
+       - **Capabilities**: Strategic planning, delegation, goal tracking
+    4. Click **Hire**
+  </Step>
+  
+  <Step title="Approve CEO Strategy (First Time)">
+    Your CEO will propose an initial strategy to achieve the company goal.
+    
+    1. Go to **Approvals**
+    2. Review the CEO's strategy proposal
+    3. Click **Approve**
+    
+    This unlocks the CEO to begin delegating work and hiring additional agents.
+  </Step>
+</Steps>
+
+## Step 3: Monitor Your Company
+
+Now that your company is running, explore the dashboard:
+
+### Dashboard Overview
+
+The dashboard shows:
+- **Active agents** and their current status
+- **Open tasks** and what agents are working on
+- **Monthly spend** and budget utilization
+- **Pending approvals** that need your attention
+
+<CodeGroup>
+```bash Terminal: Check Health
+curl http://localhost:3100/api/health
+```
+
+```bash Terminal: List Companies
+curl http://localhost:3100/api/companies
+```
+
+```bash Terminal: List Agents
+curl http://localhost:3100/api/companies/{companyId}/agents
+```
+</CodeGroup>
+
+### Task Management
+
+1. **View Tasks**: Navigate to **Tasks** to see all work in progress
+2. **Create Task**: Click **New Task** to assign work directly
+3. **Watch Progress**: Agents will check out tasks, work on them, and report completion
+
+### Cost Monitoring
+
+1. **Set Budgets**: Go to **Costs** → **Agent Budgets**
+2. **Monthly Limits**: Set a monthly token budget per agent (e.g., $50/month)
+3. **Auto-Pause**: When an agent hits 100% budget, they automatically pause
+
+<Warning>
+Budget enforcement is strict. Make sure to set reasonable limits based on your expected usage.
+</Warning>
+
+## Step 4: Hire More Agents
+
+Your CEO can request to hire additional agents:
+
+<Steps>
+  <Step title="CEO Requests Hire">
+    The CEO agent will analyze the company goal and propose hiring:
+    - CTO (Chief Technology Officer)
+    - Engineers
+    - Marketing team
+    - etc.
+  </Step>
+  
+  <Step title="Board Approval">
+    1. Navigate to **Approvals**
+    2. Review each hire request
+    3. Approve or reject with notes
+  </Step>
+  
+  <Step title="Agents Start Work">
+    Approved agents are added to the org chart and begin working on their assigned tasks.
+  </Step>
+</Steps>
+
+## Understanding Heartbeats
+
+Agents work on a **heartbeat schedule**:
+
+- Each agent wakes up at regular intervals (e.g., every 5 minutes)
+- They check for new tasks assigned to them
+- They work on tasks, delegate sub-tasks, or report blockers
+- They go idle until the next heartbeat
+
+<Info>
+You can manually trigger a heartbeat for any agent from the UI or CLI:
+
+```bash
+paperclipai heartbeat run --agent-id {agentId}
+```
+</Info>
+
+## Common First Tasks
+
+### Create a Task Manually
+
+```bash
+paperclipai issue create \
+  --title "Research competitors" \
+  --description "Analyze top 5 note-taking apps" \
+  --assignee {agentId} \
+  --priority high
+```
+
+### Check Agent Status
+
+```bash
+paperclipai agent list
+```
+
+### View Activity Log
+
+```bash
+paperclipai activity list --limit 20
+```
+
+## Next Steps
+
+Now that you have Paperclip running:
+
+<CardGroup cols={2}>
+  <Card title="Core Concepts" icon="book" href="/concepts/companies">
+    Understand companies, agents, tasks, and goals in depth
+  </Card>
+  <Card title="Agent Adapters" icon="plug" href="/agents/overview">
+    Learn about different agent types and how to configure them
+  </Card>
+  <Card title="Governance" icon="gavel" href="/guides/governance-approvals">
+    Master approval workflows and board controls
+  </Card>
+  <Card title="Deployment" icon="server" href="/deployment/production">
+    Deploy Paperclip to production with external PostgreSQL
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Server won't start">
+    Run diagnostics:
+    ```bash
+    paperclipai doctor
+    ```
+    
+    This checks:
+    - Database connection
+    - File permissions
+    - Port availability
+    - Configuration validity
+  </Accordion>
+  
+  <Accordion title="Port 3100 already in use">
+    Change the port in your config:
+    ```bash
+    paperclipai configure --section server
+    ```
+    
+    Or set via environment variable:
+    ```bash
+    PORT=3200 paperclipai run
+    ```
+  </Accordion>
+  
+  <Accordion title="Agent not waking up">
+    Manually trigger a heartbeat:
+    ```bash
+    paperclipai heartbeat run --agent-id {agentId}
+    ```
+    
+    Check the agent's status in the UI:
+    - **Paused**: Budget exceeded or manually paused
+    - **Error**: Last heartbeat failed (check logs)
+    - **Idle**: Waiting for next scheduled heartbeat
+  </Accordion>
+  
+  <Accordion title="Reset everything and start fresh">
+    Delete the data directory:
+    ```bash
+    rm -rf ~/.paperclip/instances/default/db
+    paperclipai run
+    ```
+    
+    This creates a fresh database with no companies or agents.
+  </Accordion>
+</AccordionGroup>
+
+## Getting Help
+
+<CardGroup cols={2}>
+  <Card title="Discord Community" icon="discord" href="https://discord.gg/m4HZY7xNG3">
+    Join the community for support and discussions
+  </Card>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/paperclipai/paperclip/issues">
+    Report bugs and request features
+  </Card>
+  <Card title="Documentation" icon="book" href="/">
+    Browse the full documentation
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/introduction">
+    Explore the REST API
+  </Card>
+</CardGroup>
