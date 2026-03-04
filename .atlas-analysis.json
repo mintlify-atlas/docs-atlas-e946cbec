@@ -1,0 +1,143 @@
+{
+  "projectType": "saas",
+  "projectName": "Paperclip",
+  "projectDescription": "Open-source orchestration control plane for autonomous AI agent companies",
+  "theme": "aspen",
+  "primaryColor": "#848484",
+  "lightColor": "#1d1d1d",
+  "darkColor": "#eaeaea",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/companies",
+              "concepts/agents",
+              "concepts/tasks",
+              "concepts/goals",
+              "concepts/org-structure",
+              "concepts/heartbeats"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/creating-first-company",
+              "guides/hiring-agents",
+              "guides/task-management",
+              "guides/cost-budgets",
+              "guides/governance-approvals",
+              "guides/adapters"
+            ]
+          },
+          {
+            "group": "Agent Integration",
+            "pages": [
+              "agents/overview",
+              "agents/process-adapter",
+              "agents/http-adapter",
+              "agents/openclaw",
+              "agents/custom-adapters"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/local",
+              "deployment/production",
+              "deployment/configuration",
+              "deployment/database",
+              "deployment/security"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/introduction",
+              "api/authentication"
+            ]
+          },
+          {
+            "group": "Core Endpoints",
+            "pages": [
+              "api/companies",
+              "api/agents",
+              "api/issues",
+              "api/projects",
+              "api/goals"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "api/heartbeats",
+              "api/approvals",
+              "api/costs",
+              "api/activity"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "CLI",
+        "groups": [
+          {
+            "group": "Commands",
+            "pages": [
+              "cli/overview",
+              "cli/onboard",
+              "cli/run",
+              "cli/doctor",
+              "cli/configure"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-company orchestration with complete data isolation",
+    "Hierarchical org chart with agent reporting structure",
+    "Atomic task checkout and status transitions",
+    "Budget tracking with hard-stop enforcement",
+    "Governance and approval workflows",
+    "Heartbeat-based agent invocation",
+    "Process and HTTP adapters for agent integration",
+    "Cost event tracking and rollups",
+    "Activity audit logging",
+    "CLI for setup and diagnostics"
+  ],
+  "publicApiSurface": [
+    "GET /api/companies",
+    "POST /api/companies",
+    "GET /api/companies/:companyId/agents",
+    "POST /api/companies/:companyId/agents",
+    "GET /api/companies/:companyId/issues",
+    "POST /api/companies/:companyId/issues",
+    "POST /api/issues/:issueId/checkout",
+    "POST /api/agents/:agentId/heartbeat/invoke",
+    "POST /api/companies/:companyId/cost-events",
+    "GET /api/companies/:companyId/approvals",
+    "POST /api/approvals/:approvalId/approve",
+    "paperclipai onboard",
+    "paperclipai run",
+    "paperclipai doctor",
+    "paperclipai configure"
+  ]
+}
